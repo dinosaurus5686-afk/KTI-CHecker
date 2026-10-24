@@ -354,6 +354,7 @@ details.how td{text-align:left}
         <label class="sel"><span>Jenis penelitian</span><select id="selJenis"></select><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></label>
         <button class="btn primary" id="btnRun" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7L8 5Z"/></svg>Mulai analisis</button>
         <button class="btn" id="btnAI" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9L12 2.5Zm6.5 11 .9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9.9-2.6Z"/></svg>Tinjau dengan Claude</button>
+        <button class="btn" id="btnInst" type="button" data-view="revisi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg>Revisi instan</button>
         <button class="btn" id="btnRev" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4Zm11-15 4 4"/></svg>Revisi naskah</button>
         <button class="btn" id="btnTpl" type="button" data-view="template"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM14 17l2 2 4-4"/></svg>Kesesuaian template</button>
         <button class="btn" id="btnAdm" type="button" data-view="admin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6V3Zm9 0v4h4M9 12h7M9 16h7M9 8h3"/></svg>LOA &amp; Invoice</button>
@@ -1702,6 +1703,7 @@ function toggleExportMenu(){
     ["rep-tplchk", "Kesesuaian template NOR", S.local&&isArt()?"Checklist template Nusantara of Research (.docx)":"Mode artikel jurnal, setelah analisis", !!(S.local&&isArt())],
     ["rep-rvrpt", "Laporan review (.docx)", S.ai?"Laporan berformat: keputusan, petunjuk, nilai, komentar per reviewer":"Jalankan review dulu", !!S.ai],
     ["rep-rvdoc", "Artikel + komentar balon", S.ai?"Satu berkas per reviewer (.docx), komentar di margin":"Jalankan review dulu", !!S.ai],
+    ["rep-inst", "Naskah revisi instan", S.inst&&S.inst.done?"Naskah siap publish tanpa penanda isian (.docx)":"Jalankan Revisi instan dulu", !!(S.inst&&S.inst.done)],
     ["rep-docx", "Naskah hasil revisi", hasRevisi?"Perubahan yang Anda terima, format sesuai pedoman (.docx)":"Jalankan Revisi Naskah dulu", hasRevisi],
     ["rep-tpl", "Artikel sesuai template", S.ce&&S.ce.E?"Hasil copyediting dalam template jurnal (.docx)":"Buka menu Copyediting dulu", !!(S.ce&&S.ce.E)],
     ["rep-loa", "LOA (.docx)", S.doc?"Letter of Acceptance dari data artikel":"Unggah naskah dulu", !!S.doc],
@@ -1717,6 +1719,7 @@ async function doDownload(id){
   closeMenu();
   if (id==="rep-sys") return saveFile(`Raport_Analisis_${baseName()}.html`, reportHTML(), "Raport analisis disimpan.");
   if (id==="rep-rev") return saveFile(`Hasil_Review_${baseName()}.html`, reviewStandaloneHTML(), "Hasil review disimpan.");
+  if (id==="rep-inst"){ try{ const blob = await buildRevisedDocx(instantParas()); return saveFile(`Naskah_Siap_Publish_${baseName()}.docx`, blob, "Naskah siap publish disimpan."); }catch(e){ console.error(e); toast("Naskah gagal dibuat: "+(e.message||e)); } }
   if (id==="rep-docx"){ try{ const blob = await buildRevisedDocx(); return saveFile(`Naskah_Revisi_${baseName()}.docx`, blob, "Naskah revisi disimpan."); }catch(e){ console.error(e); toast("Naskah revisi gagal dibuat: "+(e.message||e)); } }
   if (id==="rep-tpl") return ceDownload();
   if (id==="rep-cite") return citeDownload();
@@ -1994,11 +1997,11 @@ function runsXML(text, base){
   const parts = String(text).split(/(\*[^*\n]+\*)/g).filter(Boolean);
   return parts.map(t=>{ const it=/^\*[^*]+\*$/.test(t); const s=it?t.slice(1,-1):t; return `<w:r><w:rPr>${base}${it?"<w:i/>":""}</w:rPr><w:t xml:space="preserve">${xmlEsc(s.replace(/\t/g," "))}</w:t></w:r>`; }).join("");
 }
-async function buildRevisedDocx(){
+async function buildRevisedDocx(override){
   if (!window.JSZip) throw new Error("Pustaka ZIP gagal dimuat.");
   const art=isArt(); const font = art?"Arial Narrow":"Times New Roman"; const sz = art?22:24; const line = art?240:360;
   const rf = `<w:rFonts w:ascii="${font}" w:hAnsi="${font}" w:cs="${font}"/>`;
-  const paras = revisedParas(); let body=""; let firstTitle=true; const images=[]; let imgN=0;
+  const paras = override || revisedParas(); let body=""; let firstTitle=true; const images=[]; let imgN=0;
   for (const p of paras) if (p.tag==="img" && p.img && p.img.data) await imgSize(p.img);
   const P = (text, o={}) => { const base = rf+`<w:sz w:val="${o.sz||sz}"/>`+(o.b?"<w:b/>":"")+(o.it?"<w:i/>":"")+(o.hl?`<w:highlight w:val="yellow"/>`:""); return `<w:p><w:pPr><w:spacing w:after="${o.after??120}" w:line="${o.line||line}" w:lineRule="auto"/>${o.hang?`<w:ind w:left="720" w:hanging="720"/>`:o.indent?`<w:ind w:firstLine="567"/>`:""}<w:jc w:val="${o.al||"both"}"/></w:pPr>${runsXML(text, base)}</w:p>`; };
   for (const p of paras){
@@ -2036,7 +2039,8 @@ function revisionReportHTML(){
   const srcHTML = R.sources.length ? `<h2>Sumber terverifikasi</h2><p>${esc(R.srcNote)}</p><ol>${R.sources.map(s=>`<li>${mdInline(s.ref)} <small>[${esc([SRC_DB[s.via]||"",s.quartile||""].filter(Boolean).join(" · "))}]</small> ${s.used?"<b>(dikutip dalam revisi)</b>":"<small>(tidak dipakai)</small>"}${s.authorsCapped?" <small>— Scite menampilkan maksimal 3 penulis; periksa daftar penulis lengkap di DOI.</small>":""}</li>`).join("")}</ol>` : `<h2>Sumber</h2><p>${esc(R.srcNote)}</p>`;
   return `<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Laporan Revisi — ${esc(d.name)}</title><style>${REPORT_CSS}</style></head><body><p style="text-align:center;font-weight:700;color:#1F3864;margin:0">${esc(NOR_BAND)}</p><h1>LAPORAN REVISI NASKAH</h1><p class="sub">${isArt()?"Artikel jurnal · "+esc(jurnalLabel()):"Pedoman KTI 2025"} · ${new Date().toLocaleDateString("id-ID",{day:"numeric",month:"long",year:"numeric"})}</p><p><b>Naskah:</b> ${esc(d.name)}<br><b>Perubahan diterima:</b> ${R.units.reduce((a,U)=>a+U.changes.filter(c=>c.acc).length,0)} dari ${R.units.reduce((a,U)=>a+U.changes.length,0)}</p>${unitsHTML}${srcHTML}<p style="font-size:11px;color:#555;margin-top:24px">Revisi diusulkan oleh Claude berdasarkan temuan sistem, Claude, reviewer, dan editor. Periksa setiap perubahan dan setiap penanda [LENGKAPI: …] sebelum naskah diajukan.</p></body></html>`;
 }
-function vRevisi(){
+function vRevisi(){ return (S.local ? vInstant() : "") + vRevisiBase(); }
+function vRevisiBase(){
   if (!S.sample) return `<div class="card"><h3>Revisi naskah</h3><div class="notice">${icon(IC.info)}<div>${S.sampleChecked?"<b>Fitur revisi hanya dapat digunakan saat terhubung dengan Claude.</b> Buka halaman ini di claude.ai atau aplikasi Claude dengan akun Anda; revisi memakai kuota akun Claude Anda.":"Menghubungkan ke Claude…"}</div></div></div>`;
   const L=S.local; const R=S.rev; const art=isArt();
   const units = unitsForRevision();
@@ -2080,6 +2084,7 @@ const CE_JOURNAL = "Jurnal Nusantara of Research";
 function ceState(){ if (!S.ce) S.ce = {src: S.rev && S.rev.done ? "revisi" : "upload", E:null, notes:[], busy:false, prog:"", err:"", meta:{tahun:String(new Date().getFullYear()), vol:"", no:"", hal:""}}; return S.ce; }
 const splitList = s => String(s||"").split(/[;,]/).map(x=>x.trim().replace(/\.$/,"")).filter(Boolean);
 function sourceParas(src){
+  if (src==="instan" && S.inst && S.inst.done) return instantParas().map(p=>({tag:p.tag==="table"||p.tag==="img"||p.tag==="li"?p.tag:(p.isHead||p.isBab?"h":p.tag==="h"?"h":"p"), text:p.text, b:p.b, it:p.it, em:p.em, cells:p.cells, artLvl:p.artLvl, img:p.img}));
   if (src==="revisi" && S.rev && S.rev.done) return revisedParas().map(p=>({tag:p.tag==="table"||p.tag==="img"||p.tag==="li"?p.tag:(p.isHead||p.isBab?"h":p.tag==="h"?"h":"p"), text:p.text, b:p.b, it:p.it, em:p.em, cells:p.cells, artLvl:p.artLvl, img:p.img}));
   return S.doc.paras;
 }
@@ -2350,7 +2355,7 @@ function vCopyedit(){
   const seg=(name,cur,opts)=>`<div class="seg" role="group">${opts.map(([v,l,dis])=>`<button aria-pressed="${cur===v}" data-${name}="${v}" ${dis?"disabled":""}>${l}</button>`).join("")}</div>`;
   const head = `<div class="card"><h3>Copyediting ke template jurnal<span class="r">${CE_JOURNAL}</span></h3>
     <p class="small muted" style="margin:-4px 0 12px">Naskah diekstrak per subbab, dirapikan, lalu dikemas ulang memakai berkas template asli: header halaman pertama, header "Nama Pengarang - Judul", footer bernomor halaman, margin 3,5–3–3–3 cm, Arial Narrow, tabel abstrak abu-abu, bingkai "Cara mengutip", dan daftar rujukan berindentasi gantung.</p>
-    <div class="toolbar" style="margin-bottom:10px"><span class="small muted">Sumber naskah:</span>${seg("cesrc",C.src,[["upload","Naskah unggahan"],["revisi",hasRev?"Hasil revisi (perubahan diterima)":"Hasil revisi (belum ada)",!hasRev]])}${seg("mode",S.aiMode,[["teliti","Teliti"],["cepat","Cepat"]])}</div>
+    <div class="toolbar" style="margin-bottom:10px"><span class="small muted">Sumber naskah:</span>${seg("cesrc",C.src,[["upload","Naskah unggahan"],["revisi",hasRev?"Hasil revisi (perubahan diterima)":"Hasil revisi (belum ada)",!hasRev],["instan",S.inst&&S.inst.done?"Hasil revisi instan":"Revisi instan (belum ada)",!(S.inst&&S.inst.done)]])}${seg("mode",S.aiMode,[["teliti","Teliti"],["cepat","Cepat"]])}</div>
     ${!art?`<div class="notice" style="margin-bottom:10px">${icon(IC.info)}<div>Dokumen terpilih adalah <b>${esc(S.tahap.toLowerCase())} skripsi</b>. Claude akan meringkasnya menjadi artikel (pendahuluan dari BAB I–II, metode dari BAB III, hasil dan pembahasan dari BAB IV, kesimpulan dari BAB V) tanpa mengarang data.</div></div>`:""}
     <div class="grid" style="gap:10px;margin-bottom:10px">${[["tahun","Tahun terbit"],["vol","Volume"],["no","Nomor"],["hal","Halaman (mis. 68-77)"]].map(([k,l])=>`<div class="c3"><label class="small muted" for="ce_${k}">${l}</label><input id="ce_${k}" data-cemeta="${k}" value="${esc(C.meta[k])}" placeholder="opsional" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:13px"></div>`).join("")}</div>
     <div class="toolbar" style="margin:0">
@@ -2977,6 +2982,7 @@ function sectionModel(cat){
   if (cat==="sitasi") return citeReportModel();
   if (cat==="template") return templateReportModel();
   if (cat==="banding") return bandingModel();
+  if (cat==="instan") return instantModel();
   if (cat==="grammar") return grammarModel();
   if (cat==="similarity") return similarityModel();
   if (cat==="aicheck") return aicheckModel();
@@ -3530,6 +3536,161 @@ function aicheckModel(){
   return {title:"Laporan Cek Penggunaan AI (Indikatif)", sub:"Berdasarkan ciri gaya bahasa; bukan bukti penggunaan AI", info:baseInfo(), blocks:[{h:"A. Ringkasan"}, {p:`Skor indikasi AI keseluruhan ${X.overall}% (${aiLab(X.overall).toLowerCase()}).${X.claude?` Penilaian Claude: ${X.claude.keseluruhan}%. ${X.claude.ringkasan}`:""} Hasil ini indikatif: detektor AI dapat keliru, sehingga perlu dikonfirmasi dengan penulis.`}, {h:"B. Rincian per Paragraf"}, {table:{head:["No","Bagian","Cuplikan paragraf","Skor","Alasan"], w:[5,12,43,12,28], rows:R.map((r,k)=>[cell(k+1,{al:"center"}), r.bab||"-", r.text.slice(0,300)+(r.text.length>300?"…":""), cell(`${r.score}%${r.claude?`\nClaude ${r.claude.skor}%`:""}`,{fill:SEV_FILL[aiSev(r.score)],al:"center"}), [r.hits.length?`Frasa khas: ${r.hits.slice(0,6).join(", ")}`:"", `Variasi kalimat ${r.cv}; rata-rata ${r.mean} kata`, r.claude?`Claude: ${r.claude.alasan}`:""].filter(Boolean).join("\n")])}}], file:"Laporan_Cek_Penggunaan_AI"};
 }
 
+/* ═════════════ REVISI INSTAN: naskah siap publish ═════════════ */
+const INST_ACT = {tetap:"Dipertahankan", ubah:"Diperbaiki", gabung:"Digabung", pecah:"Dipecah", pindah:"Dipindah", baru:"Paragraf baru"};
+function instantPrompt(unit, ps, T, sources, outline, part){
+  const art=isArt();
+  const srcBlock = sources.length ? `SUMBER TERVERIFIKASI (boleh dikutip HANYA jika isinya mendukung kalimat, dan HANYA dengan bentuk kutipan yang tertulis):\n${sources.map(s=>`[${s.id}] ${s.cite.nar} / ${s.cite.par} — "${s.title}". ${s.journal}${s.quartile?` [${s.quartile}]`:""}. Ringkasan: ${s.abstract}`).join("\n")}` : "SUMBER BARU: tidak tersedia. Gunakan hanya rujukan yang sudah ada di naskah.";
+  const ed = S.ai && S.ai.petunjuk ? S.ai.petunjuk.filter(pt=>{ const sec=REV_SECTIONS.find(s=>fold(pt.bagian).startsWith(fold(s).slice(0,6))); return sec && REV_BAB[sec] && fold(REV_BAB[sec])===fold(unit); }).map(pt=>`- (${pt.prioritas}) ${pt.langkah}${pt.contoh?` Contoh: ${pt.contoh}`:""}`) : [];
+  return `Anda editor senior ${art?`jurnal ${NOR_NAME}`:"dan dosen pembimbing skripsi"} yang menyiapkan naskah agar SIAP ${art?"TERBIT":"DIUJIKAN"}. Tugas: tulis ulang bagian "${unit}"${part?` (potongan ${part})`:""} secara utuh sehingga logis, sistematis, runtut, dan harmonis dengan bagian lain, serta menyelesaikan SEMUA masukan di bawah.
+
+ACUAN:
+${art?RULES_ART:RULES_KTI}
+${langRule()}
+
+KERANGKA SELURUH NASKAH (untuk menjaga keselarasan antarbagian):
+${outline}
+
+MASUKAN YANG HARUS DISELESAIKAN (sistem, Claude, reviewer):
+${T.length?T.map(findingLine).join("\n"):"(tidak ada temuan khusus; rapikan bahasa, alur, dan kepaduan)"}
+${ed.length?`PETUNJUK EDITOR:\n${ed.join("\n")}`:""}
+${S.revNote&&S.revNote.trim()?`INSTRUKSI TAMBAHAN: ${S.revNote.trim().slice(0,800)}`:""}
+
+${srcBlock}
+
+TEKS ASLI BAGIAN INI (setiap unit diberi ID; unit bertanda OBJEK adalah tabel/gambar yang tidak boleh diubah):
+${ps.map(p=>p.tag==="img"?`[P${p.i}] (OBJEK GAMBAR)`:p.tag==="table"?`[P${p.i}] (OBJEK TABEL) ${p.text.slice(0,300)}`:`[P${p.i}]${p.isBab?" (JUDUL BAB)":p.isHead?" (SUBJUDUL)":p.tag==="li"?" (BUTIR)":""} ${p.text}`).join("\n")}
+
+METODE YANG BOLEH DIPAKAI: memperbaiki kalimat; melengkapi penalaran, definisi, transisi, dan kaitan antarparagraf; membuat paragraf atau subjudul baru yang memang dibutuhkan; memecah paragraf yang terlalu padat; menggabungkan paragraf yang tumpang tindih; memindahkan (bongkar pasang) urutan paragraf agar alurnya logis; menghapus pengulangan.
+
+KETENTUAN KETAT:
+1. Hasil akhir harus BERSIH dan siap ${art?"terbit":"diujikan"}: DILARANG menulis penanda seperti [LENGKAPI], [...], "isi di sini", atau catatan untuk penulis di dalam teks.
+2. DILARANG mengarang data, angka, persentase, nama orang/tempat/lembaga, hasil uji statistik, kutipan langsung, atau isi sumber. Semua angka dan fakta harus berasal dari teks asli naskah atau SUMBER TERVERIFIKASI. Jika sebuah masukan membutuhkan data yang tidak ada, tulis ulang kalimat secara akurat dengan informasi yang tersedia (tanpa klaim baru), lalu catat di "perlu_cek".
+3. Setiap klaim baru wajib didukung kutipan dari SUMBER TERVERIFIKASI atau rujukan yang sudah ada di naskah.
+4. Jangan menulis ulang JUDUL BAB (sudah dipertahankan otomatis). ${unit.match(/awal/i)?"Nama penulis, institusi, dan e-mail tidak boleh diubah. ":""}Setiap OBJEK (tabel/gambar) WAJIB muncul tepat satu kali sebagai {"jenis":"objek","id":"P.."} di posisi yang paling tepat.
+5. Bahasa: sama dengan bahasa paragraf aslinya; kalimat efektif; istilah asing ditandai *bintang* agar dicetak miring; sitasi ${art?"APA edisi 7":"sesuai pedoman"}.
+6. "asal" berisi ID paragraf asli yang menjadi dasar unit itu ([] untuk paragraf baru). "aksi" salah satu: tetap, ubah, gabung, pecah, pindah, baru.
+
+Balas HANYA JSON:
+{"isi":[{"jenis":"subjudul|paragraf|butir|objek","id":"P..(khusus objek)","teks":"...","asal":["P12"],"aksi":"ubah"}],"ringkasan":"2-3 kalimat: apa yang diubah dan mengapa","perlu_cek":["hal yang perlu dipastikan penulis (data/sumber), tanpa memasukkannya ke teks"]}`;
+}
+function articleOutline(){
+  const M=S.local.M; const out=[]; let last="";
+  M.paras.forEach(p=>{ if (!p.text || p.toc || p.tag==="img" || p.tag==="table") return; if (p.bab!==last){ out.push(`# ${p.bab}`); last=p.bab; } if (p.isHead && !p.isBab) out.push(`  - ${p.text.slice(0,90)}`); else if (!p.isHead && p.text.length>60) out.push(`  · ${p.text.split(/(?<=[.!?])\s/)[0].slice(0,140)}`); });
+  return out.join("\n").slice(0,6000);
+}
+async function runInstant(){
+  if (!S.sample){ toast("Revisi instan memakai Claude; buka halaman ini di claude.ai atau aplikasi Claude."); return; }
+  if (!S.local || (S.inst && S.inst.busy)) return;
+  const M=S.local.M; const ctl=new AbortController();
+  const units = (S.revSel && S.revSel.length ? S.revSel : unitsForRevision());
+  S.inst = {busy:true, ctl, units:units.map(u=>({unit:u, st:"wait", items:[], ringkasan:"", cek:[], err:""})), sources:[], srcNote:"", done:false};
+  render();
+  const origNums = new Set((M.paras.map(p=>p.text).join(" ").match(/\d+(?:[.,]\d+)*/g)||[]).map(x=>x.replace(/[.,]/g,"")));
+  try{
+    let sources=[];
+    if (S.useScite && S.mcp){ const r = await searchSources(ctl.signal); sources=r.list; S.inst.srcNote=r.note; } else S.inst.srcNote="Tanpa pencarian sumber baru; hanya rujukan yang sudah ada di naskah yang dipakai.";
+    S.inst.sources=sources; render();
+    const outline = articleOutline(); const tier = S.aiMode==="teliti" ? "complex" : "default";
+    const jobs=[];
+    S.inst.units.forEach(U=>{ const ps=M.paras.filter(p=>p.bab===U.unit && !p.toc && (p.text || p.tag==="img")); const T=findingsForUnit(U.unit); const parts=chunksOf(ps.map(p=>p.tag==="img"?{...p,text:p.text||"[gambar]"}:p), 16000).map(ch=>ch.map(x=>M.paras[x.i])); parts.forEach((ch,k)=>jobs.push({U, ps:ch, T, k, part:parts.length>1?`${k+1}/${parts.length}`:""})); U.parts=parts.length; U.chunks=[]; });
+    let idx=0;
+    const worker = async () => {
+      while (idx<jobs.length){
+        const job=jobs[idx++]; const U=job.U; U.st="run"; render();
+        try{
+          const r = await S.sample.json(instantPrompt(U.unit, job.ps, job.T, sources, outline, job.part), {signal:ctl.signal, modelTier:tier, cache:false});
+          const arr=v=>Array.isArray(v)?v:[]; const pid=x=>parseInt(String(x||"").replace(/\D/g,""),10);
+          const valid=new Set(job.ps.map(p=>p.i)); const objs=job.ps.filter(p=>p.tag==="img"||p.tag==="table").map(p=>p.i); const used=new Set(); const items=[];
+          arr(r.isi).forEach(x=>{
+            const j=String(x.jenis||"paragraf").toLowerCase();
+            if (j==="objek"){ const i=pid(x.id); if (objs.includes(i) && !used.has(i)){ used.add(i); items.push({jenis:"objek", i}); } return; }
+            let t=String(x.teks||"").trim(); if (!t) return;
+            if (/\[\s*LENGKAPI|\[\s*\.\.\.\s*\]|isi di sini/i.test(t)){ U.cek.push("Penanda isian dihapus dari teks: "+(/\[[^\]]*\]/.exec(t)||[""])[0]); t=t.replace(/\s*\[\s*LENGKAPI[^\]]*\]\s*/gi," ").replace(/\s*\[\s*\.\.\.\s*\]\s*/g," ").replace(/\s{2,}/g," ").trim(); if (!t) return; }
+            const asal=arr(x.asal).map(pid).filter(i=>valid.has(i)); const aksi=INST_ACT[x.aksi]?x.aksi:(asal.length?"ubah":"baru");
+            const newNums=(t.match(/\d+(?:[.,]\d+)*/g)||[]).map(n=>n.replace(/[.,]/g,"")).filter(n=>n.length>1 && !origNums.has(n) && !sources.some(s=>String(s.year)===n || (s.volume&&String(s.volume)===n)));
+            if (newNums.length) U.cek.push(`Angka yang tidak ada di naskah asli muncul di ${U.unit}: ${[...new Set(newNums)].slice(0,5).join(", ")}. Pastikan kebenarannya.`);
+            items.push({jenis:/subjudul/.test(j)?"subjudul":/butir/.test(j)?"butir":"paragraf", teks:t, asal, aksi});
+          });
+          objs.filter(i=>!used.has(i)).forEach(i=>items.push({jenis:"objek", i}));
+          U.chunks[job.k]=items;
+          if (r.ringkasan) U.ringkasan = (U.ringkasan?U.ringkasan+" ":"")+String(r.ringkasan);
+          arr(r.perlu_cek).forEach(c=>{ const s=String(c||"").trim(); if (s) U.cek.push(s); });
+        }catch(e){ if (e&&e.code==="cancelled") throw e; U.err = e&&e.code==="rate_limited" ? "Batas pemakaian Claude tercapai." : e&&e.code==="invalid_json" ? "Jawaban tidak terbaca." : "Gagal direvisi."; }
+        if (!jobs.slice(idx).some(j=>j.U===U)){ U.items = U.chunks.flat().filter(Boolean); U.st = U.err&&!U.items.length ? "fail" : "done"; }
+        render();
+      }
+    };
+    await Promise.all([worker(), worker()]);
+    const all = S.inst.units.flatMap(U=>U.items.map(x=>x.teks||"")).join(" ");
+    S.inst.sources.forEach(s=>{ s.used = all.includes(s.cite.par.slice(1,-1)) || all.includes(s.cite.nar) || all.includes(s.cite.par); });
+    S.inst.done=true;
+    toast("Revisi instan selesai. Periksa hasilnya, lalu unduh naskah siap publish.");
+  }catch(e){ if (!(e&&e.code==="cancelled")) toast("Revisi instan terhenti."); S.inst.done = S.inst.units.some(U=>U.items.length); }
+  finally{ S.inst.busy=false; S.inst.ctl=null; render(); }
+}
+/* susunan paragraf hasil revisi instan (bentuk sama dengan revisedParas) */
+function instantParas(){
+  const M=S.local.M; const done = new Map((S.inst?S.inst.units:[]).filter(U=>U.items.length).map(U=>[U.unit,U]));
+  const out=[]; const emitted=new Set();
+  M.paras.forEach(p=>{
+    const U=done.get(p.bab);
+    if (!U){ out.push({...p}); return; }
+    if (p.isBab){ out.push({...p}); return; }
+    if (emitted.has(U.unit)) return;
+    emitted.add(U.unit);
+    const region = p.region;
+    U.items.forEach(x=>{
+      if (x.jenis==="objek"){ out.push({...M.paras[x.i]}); return; }
+      if (x.jenis==="subjudul") out.push({tag:"h", text:x.teks, isHead:true, bab:U.unit, region, artLvl:2, sub:x.teks});
+      else if (x.jenis==="butir") out.push({tag:"li", text:x.teks, bab:U.unit, region});
+      else out.push({tag:"p", text:x.teks, bab:U.unit, region, changed:true});
+    });
+  });
+  const newRefs = (S.inst?S.inst.sources:[]).filter(s=>s.used).map(s=>({tag:"p", text:s.ref, region:"pustaka", bab:p0bab(), ref:true}));
+  if (newRefs.length){
+    const idx = out.map((p,i)=>p.region==="pustaka"&&!p.isHead&&p.text?i:-1).filter(i=>i>=0);
+    if (idx.length){ const seen=new Set(); const entries = idx.map(i=>out[i]).concat(newRefs).filter(e=>{ const k=fold(e.text.replace(/\*/g,"")).slice(0,50); if (seen.has(k)) return false; seen.add(k); return true; }).sort((a,b)=>fold(a.text.replace(/\*/g,"")).localeCompare(fold(b.text.replace(/\*/g,"")))); const first=idx[0]; for (let k=idx.length-1;k>=0;k--) out.splice(idx[k],1); out.splice(first,0,...entries); }
+    else { out.push({tag:"h", text:isArt()?"DAFTAR RUJUKAN":"DAFTAR PUSTAKA", isHead:true, isBab:true, region:"pustaka"}); out.push(...newRefs); }
+  }
+  return out;
+}
+function instStats(){
+  const U=(S.inst?S.inst.units:[]); const it=U.flatMap(u=>u.items.filter(x=>x.jenis!=="objek"));
+  const c=k=>it.filter(x=>x.aksi===k).length;
+  return {paragraf:it.length, baru:c("baru"), ubah:c("ubah"), gabung:c("gabung"), pecah:c("pecah"), pindah:c("pindah"), tetap:c("tetap"), cek:U.reduce((a,u)=>a+u.cek.length,0), sumber:(S.inst?S.inst.sources.filter(s=>s.used).length:0)};
+}
+function vInstant(){
+  const I=S.inst; const conn=!!S.sample;
+  const head = `<div class="card" style="margin-bottom:16px;border:1px solid var(--accent,#4f46e5)"><h3>Revisi instan<span class="r">naskah siap ${isArt()?"publish":"diujikan"}</span></h3>
+    <p class="small" style="margin:0 0 10px">Claude menulis ulang setiap ${isArt()?"bagian":"bab"} secara utuh berdasarkan <b>semua masukan</b> (pemeriksaan sistem, tinjauan/review reviewer, petunjuk editor, dan instruksi tambahan). Caranya: melengkapi penalaran yang kurang, menambah paragraf atau subjudul yang dibutuhkan, memecah atau menggabungkan paragraf, dan menyusun ulang urutannya supaya logis, sistematis, dan harmonis. Hasilnya bersih tanpa penanda [LENGKAPI].</p>
+    <p class="small muted" style="margin:0 0 12px">Claude tidak mengarang data, angka, hasil uji, atau sumber. Hal yang memang memerlukan data penulis dicatat di daftar <b>Perlu dicek</b> (di luar naskah). Angka baru yang tidak ada di naskah asli juga ditandai otomatis. Revisi Naskah biasa di atas tetap tersedia dengan penanda [LENGKAPI].</p>
+    <div class="toolbar" style="margin:0">${I&&I.busy?`<button class="btn sm" data-act="inststop">Hentikan</button><span class="small">Menulis ulang ${I.units.filter(u=>u.st==="done").length} dari ${I.units.length} ${isArt()?"bagian":"bab"}…</span>`:`<button class="btn primary bigbtn" data-act="instrun" ${conn?"":"disabled"}>${icon("M13 2 4 14h7l-1 8 9-12h-7l1-8Z")}${I&&I.done?"Jalankan ulang revisi instan":"Revisi instan"}</button>`}${conn?`<span class="small muted">${(S.revSel&&S.revSel.length?S.revSel:unitsForRevision()).length} ${isArt()?"bagian":"bab"} · ${S.useScite&&S.mcp?"dengan pencarian sumber terverifikasi":"tanpa sumber baru"}${S.ai?"":" · jalankan review/tinjauan dulu agar masukannya lengkap"}</span>`:`<span class="small muted">Memerlukan koneksi ke Claude (buka di claude.ai).</span>`}</div></div>`;
+  if (!I) return head;
+  const st=instStats();
+  let html = head;
+  if (I.busy || I.srcNote) html += `<div class="card" style="margin-bottom:16px"><ul class="steps">${I.srcNote?`<li class="done"><span class="dot sev-ok">${icon(IC.check)}</span>Sumber: ${esc(I.srcNote)}</li>`:""}${I.units.map(U=>`<li class="${U.st==="done"?"done":""}">${U.st==="run"?`<div class="spinner"></div>`:U.st==="done"?`<span class="dot sev-ok">${icon(IC.check)}</span>`:U.st==="fail"?`<span class="dot sev-error">${icon(IC.x)}</span>`:`<span class="dot sev-info" style="opacity:.4">${icon("M12 12h.01")}</span>`}${esc(U.unit)}${U.st==="done"?` <span class="muted small">· ${U.items.filter(x=>x.jenis!=="objek").length} unit teks</span>`:""}${U.err?` <span class="small" style="color:var(--bad,#c0392b)">${esc(U.err)}</span>`:""}</li>`).join("")}</ul></div>`;
+  if (!I.done) return html;
+  html += `<div class="kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">${[["Paragraf baru",st.baru,"ditambahkan",IC.check],["Diperbaiki",st.ubah+st.gabung+st.pecah,`${st.gabung} digabung · ${st.pecah} dipecah`,IC.doc],["Dipindah",st.pindah,"bongkar pasang urutan",IC.info],["Perlu dicek",st.cek,`${st.sumber} sumber baru dipakai`,IC.warn]].map(([l,v,x,d])=>`<div class="kpi"><div class="ic">${icon(d)}</div><div><div class="lb">${l}</div><div class="v">${v}</div><div class="s">${x}</div></div></div>`).join("")}</div>
+    <div class="toolbar" style="margin:16px 0"><button class="btn primary" data-act="instdocx">Unduh naskah siap publish (.docx)</button>${isArt()?`<button class="btn" data-act="insttpl">Kemas ke template ${esc(NOR_NAME)} (.docx)</button>`:""}<button class="btn" data-secdl="instan:docx">Laporan revisi instan (.docx)</button><button class="btn" data-secdl="instan:pdf">Laporan (.pdf)</button></div>`;
+  html += I.units.filter(U=>U.items.length||U.err).map(U=>{ const M=S.local.M; const before=M.paras.filter(p=>p.bab===U.unit && !p.isBab && p.text && p.tag!=="img" && p.tag!=="table").map(p=>p.text).join("\n\n"); const after=U.items.filter(x=>x.jenis!=="objek").map(x=>x.teks).join("\n\n");
+    return `<section class="card babcard" style="margin-bottom:16px"><div class="babhead"><h3>${esc(U.unit)}</h3>${U.err?sevPill("error",U.err):""}</div>
+      ${U.ringkasan?`<p class="small" style="margin:0 0 10px"><b>Yang dilakukan:</b> ${esc(U.ringkasan)}</p>`:""}
+      ${U.cek.length?`<div class="notice" style="margin-bottom:10px">${icon(IC.warn)}<div><b>Perlu dicek penulis:</b><ul class="blist small" style="margin-top:4px">${[...new Set(U.cek)].map(c=>`<li>${esc(c)}</li>`).join("")}</ul></div></div>`:""}
+      <details><summary class="small" style="cursor:pointer;font-weight:600">Lihat hasil (${U.items.filter(x=>x.jenis!=="objek").length} unit teks)</summary>
+      <div style="margin-top:10px">${U.items.map(x=>x.jenis==="objek"?`<p class="small muted">[${M.paras[x.i].tag==="img"?"Gambar":"Tabel"} dipertahankan]</p>`:`<div style="margin:0 0 10px"><span class="chip" style="margin-bottom:4px">${esc(INST_ACT[x.aksi]||x.aksi)}${x.asal&&x.asal.length?` · dari P${x.asal.join(", P")}`:""}</span>${x.jenis==="subjudul"?`<h4 style="margin:4px 0">${mdInline(x.teks)}</h4>`:`<p style="margin:4px 0;font-family:var(--serif);line-height:1.7">${x.jenis==="butir"?"• ":""}${mdInline(x.teks)}</p>`}</div>`).join("")}</div></details>
+      <details style="margin-top:8px"><summary class="small" style="cursor:pointer;font-weight:600">Bandingkan dengan teks asli</summary><div class="q" style="font-family:var(--serif);line-height:1.7;white-space:pre-wrap;margin-top:8px">${opsHTML(diffOps(before, after))}</div></details></section>`; }).join("");
+  return html;
+}
+function instantModel(){
+  const I=S.inst; const st=instStats(); const blocks=[];
+  blocks.push({h:"A. Ringkasan"}, {table:{head:["Indikator","Jumlah"], w:[70,30], rows:[["Unit teks hasil revisi",st.paragraf],["Paragraf baru",st.baru],["Paragraf diperbaiki",st.ubah],["Paragraf digabung",st.gabung],["Paragraf dipecah",st.pecah],["Paragraf dipindah",st.pindah],["Dipertahankan",st.tetap],["Sumber terverifikasi baru yang dipakai",st.sumber],["Hal yang perlu dicek penulis",st.cek]].map(r=>[r[0],cell(r[1],{al:"center"})])}});
+  blocks.push({h:"B. Yang Dilakukan per Bagian"}, {table:{head:[isArt()?"Bagian":"Bab","Yang dilakukan","Perlu dicek penulis"], w:[16,50,34], rows:I.units.map(U=>[cell(U.unit,{b:true}), U.ringkasan||(U.err?U.err:"—"), [...new Set(U.cek)].join("\n")||"—"])}});
+  const used=I.sources.filter(s=>s.used); if (used.length) blocks.push({h:"C. Sumber Baru yang Dipakai"}, {table:{head:["No","Referensi (APA 7)","Basis data"], w:[6,74,20], rows:used.map((s,k)=>[cell(k+1,{al:"center"}), s.ref.replace(/\*/g,""), [SRC_DB[s.via]||"",s.quartile||""].filter(Boolean).join(", ")||"-"])}});
+  blocks.push({p:"Revisi instan tidak menambahkan data, angka, atau hasil yang tidak ada di naskah asli; hal yang memerlukan data penulis tercantum di kolom Perlu dicek.", i:true});
+  return {title:"Laporan Revisi Instan", sub:acuanLabel(), info:baseInfo(), blocks, file:"Laporan_Revisi_Instan"};
+}
+
 /* ═════════════ RUN ═════════════ */
 const WEIGHTS = {struktur:{e:5,w:2,cap:25},isi:{e:3,w:1,cap:15},abstrak:{e:3,w:1.5,cap:12},bahasa:{e:1.5,w:.5,cap:12},sitasi:{e:2,w:1,cap:16},visual:{e:2,w:1,cap:8},format:{e:3,w:1.5,cap:12}};
 const STEPS = ["Membaca susunan bab dan sub-bab","Memeriksa isi setiap bab","Memeriksa abstrak dan kata kunci","Memeriksa ejaan dan diksi","Mencocokkan sitasi dengan daftar pustaka","Memeriksa tabel, gambar, dan format"];
@@ -3878,6 +4039,7 @@ function render(){
   $("#btnRev").classList.toggle("primary", !!(S.local && S.ai && !S.rev));
   $("#btnExport").disabled = !S.local;
   $("#btnAdm").classList.toggle("primary", S.view==="admin");
+  $("#btnInst").disabled = !S.local; $("#btnInst").title = !S.local ? "Jalankan analisis terlebih dahulu" : "Tulis ulang naskah menjadi siap publish berdasarkan semua masukan";
   $("#btnTpl").classList.toggle("primary", S.view==="template"); $("#btnTpl").disabled = !S.local;
   $("#btnReset").disabled = !S.doc && !S.chat.length;
   $("#selJenis").disabled = false;
@@ -3894,7 +4056,7 @@ function gotoPara(i){
 }
 
 /* ═════════════ FLOW ═════════════ */
-function invalidate(){ S.excl=new Set(); if (S.gram&&S.gram.ctl) S.gram.ctl.abort(); S.gram=null; S.aicheck=null; if (S.sim){ if (S.sim.ctl) S.sim.ctl.abort(); S.sim.rows=null; } S.ce=null; S.local=null; S.rev=null; S.revSel=null; S.ai=null; S.aiErr=""; S.filter={}; S.babSel="all"; }
+function invalidate(){ S.excl=new Set(); if (S.inst&&S.inst.ctl) S.inst.ctl.abort(); S.inst=null; if (S.gram&&S.gram.ctl) S.gram.ctl.abort(); S.gram=null; S.aicheck=null; if (S.sim){ if (S.sim.ctl) S.sim.ctl.abort(); S.sim.rows=null; } S.ce=null; S.local=null; S.rev=null; S.revSel=null; S.ai=null; S.aiErr=""; S.filter={}; S.babSel="all"; }
 function setDoc(doc){
   if (S.aiCtl) S.aiCtl.abort();
   S.doc = doc; invalidate(); S.chat=[]; if (S.adm){ S.adm.filled=false; S.adm.reg=""; S.adm.doi=""; S.adm.nomor=""; S.adm.noart=""; }
@@ -4164,6 +4326,10 @@ document.addEventListener("click", e=>{
   if (a==="citedl") return citeDownload();
   if (a==="tplreset") return resetTemplate();
   if (a==="cmprun") return runCompare();
+  if (a==="instrun") return runInstant();
+  if (a==="inststop") return S.inst && S.inst.ctl && S.inst.ctl.abort();
+  if (a==="instdocx") return (async()=>{ try{ const blob=await buildRevisedDocx(instantParas()); await saveFile(`Naskah_Siap_Publish_${baseName()}.docx`, blob, "Naskah siap publish disimpan."); }catch(e){ console.error(e); toast("Naskah gagal dibuat: "+(e.message||e)); } })();
+  if (a==="insttpl"){ const C=ceState(); C.src="instan"; C.E=null; C.edited=false; C.err=""; C.notes=[]; return go("copyedit"); }
   if (a==="cmpcur"){ const C=cmpState(); C.docs.awal={name:S.doc.name, paras:S.doc.paras.filter(p=>p.tag!=="img"&&p.text&&p.text.trim()).map((p,k)=>({text:p.text.replace(/\s+/g," ").trim(),k})), comments:[]}; C.res=null; return render(); }
   if (a==="cmptrack") return (async()=>{ try{ const blob=await buildTrackedDocx(); await saveFile(`Banding_TrackChanges_${(cmpState().docs.akhir.name||"naskah").replace(/\.[^.]+$/,"").replace(/[^\w\-]+/g,"_")}.docx`, blob, "Dokumen track changes disimpan. Buka di Word: tab Review menampilkan setiap perubahan."); }catch(e){ console.error(e); toast("Dokumen gagal dibuat: "+(e.message||e)); } })();
   if (a==="gramrun") return runGrammar();
