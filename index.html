@@ -283,7 +283,7 @@ details.how td{text-align:left}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
 .inclbox{display:inline-flex;align-items:center;margin-right:2px;cursor:pointer}.inclbox input{width:17px;height:17px;accent-color:var(--accent,#4f46e5);cursor:pointer;margin:0}
-.f.excl,tr.excl{opacity:.45}.f.excl .f-head h4{text-decoration:line-through}
+.pt-row.excl,.babcard.excl{opacity:.5}.f.excl,tr.excl{opacity:.45}.f.excl .f-head h4{text-decoration:line-through}
 .inclbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px}.inclbar .small{margin-right:auto}
 </style>
 <style>
@@ -1586,7 +1586,8 @@ function vReview(){
     if (other.length) groups.push(["Lainnya", other]);
     body = `<div class="card"><h3>Petunjuk revisi dari editor<span class="r">${doneN} dari ${ai.petunjuk.length} selesai</span></h3>
       <div class="track" style="margin-bottom:14px"><i style="width:${pct(doneN,ai.petunjuk.length)}%;background:var(--ok)"></i></div>
-      ${groups.map(([g,ps])=>`<h4 style="margin:14px 0 8px;font-size:13px">${esc(g)}</h4><div class="flist">${ps.map(p=>`<label class="toggle" style="background:var(--surface)"><input type="checkbox" data-done="${esc(p.langkah)}" ${S.revDone[p.langkah]?"checked":""}><span style="flex:1;${S.revDone[p.langkah]?"text-decoration:line-through;opacity:.6":""}"><span style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px">${sevPill(p.prioritas==="wajib"?"error":"warning", p.prioritas==="wajib"?"Wajib":"Disarankan")}${p.reviewer.map(r=>`<span class="chip">Reviewer ${r}</span>`).join("")}</span><b style="font-weight:600">${esc(p.langkah)}</b>${p.contoh?`<span class="fix" style="display:block"><b>Contoh:</b> ${esc(p.contoh)}</span>`:""}</span></label>`).join("")}</div>`).join("")}
+      ${inclBar("pet","Petunjuk yang disertakan dalam laporan dan revisi")}<p class="small muted" style="margin:-4px 0 10px">Kotak kiri: disertakan dalam laporan dan revisi. Kotak kanan: tandai sudah dikerjakan.</p>
+      ${groups.map(([g,ps])=>`<h4 style="margin:14px 0 8px;font-size:13px">${esc(g)}</h4><div class="flist">${ps.map(p=>`<div class="pt-row ${incl(p)?"":"excl"}" style="display:flex;gap:8px;align-items:flex-start">${inclBox(p)}<label class="toggle" style="background:var(--surface);flex:1"><input type="checkbox" data-done="${esc(p.langkah)}" ${S.revDone[p.langkah]?"checked":""}><span style="flex:1;${S.revDone[p.langkah]?"text-decoration:line-through;opacity:.6":""}"><span style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px">${sevPill(p.prioritas==="wajib"?"error":"warning", p.prioritas==="wajib"?"Wajib":"Disarankan")}${p.reviewer.map(r=>`<span class="chip">Reviewer ${r}</span>`).join("")}</span><b style="font-weight:600">${esc(p.langkah)}</b>${p.contoh?`<span class="fix" style="display:block"><b>Contoh:</b> ${esc(p.contoh)}</span>`:""}</span></label></div>`).join("")}</div>`).join("")}
       ${ai.editorFailed?`<p class="small muted">Editor gagal menyusun petunjuk; daftar ini disusun dari komentar wajib para reviewer.</p>`:""}</div>`;
   } else if (S.revView==="bagian"){
     body = REV_SECTIONS.map(s=>{
@@ -1611,7 +1612,7 @@ function vReview(){
 function reviewReportHTML(){
   const ai=S.ai; if(!ai||ai.mode!=="review") return "";
   return `<h2>Review reviewer (simulasi ${esc(jurnalLabel())})</h2><p><b>Keputusan editor:</b> ${esc(ai.keputusan)} · skor ${ai.skor}/100</p><p>${esc(ai.ringkasan)}</p>
-<h2>Petunjuk revisi</h2><ol>${ai.petunjuk.map(p=>`<li><b>[${esc(p.bagian)} · ${p.prioritas}]</b> ${esc(p.langkah)}${p.contoh?`<br><small>Contoh: ${esc(p.contoh)}</small>`:""}</li>`).join("")}</ol>
+<h2>Petunjuk revisi</h2><ol>${ai.petunjuk.filter(incl).map(p=>`<li><b>[${esc(p.bagian)} · ${p.prioritas}]</b> ${esc(p.langkah)}${p.contoh?`<br><small>Contoh: ${esc(p.contoh)}</small>`:""}</li>`).join("")}</ol>
 ${ai.reviewers.map(r=>`<h2>${esc(r.nama)} — ${esc(r.rekomendasi)} (skor ${r.skor})</h2><p><i>Fokus: ${esc(r.fokus)}</i></p><p>${esc(r.ringkasan)}</p><table><tr><th>Bagian</th><th>Nilai</th><th>Komentar dan saran</th></tr>${r.bagian.map(b=>`<tr><td>${esc(b.bagian)}</td><td>${b.nilai}</td><td>${b.komentar.filter(incl).map(c=>`• ${esc(c.title)}${c.quote?` <small>— "${esc(c.quote)}"</small>`:""}<br><small><b>Saran:</b> ${esc(c.fix)}</small>`).join("<br>")||"—"}</td></tr>`).join("")}</table>`).join("")}`;
 }
 
@@ -1782,9 +1783,9 @@ function unitsForRevision(){
 function findingsForUnit(unit){
   const L=S.local, M=L.M; const inU = p => p!=null && M.paras[p] && M.paras[p].bab===unit;
   const T=[];
-  L.all.forEach(f=>{ if (f.sev==="ok" || f.sev==="info" || f.cat==="format") return; const occ=(f.occ||[]).filter(o=>inU(o.p)); if (!occ.length && !inU(f.p)) return; T.push({src:"Sistem", f, occ:occ.length?occ:[{p:f.p,q:f.quote||""}]}); });
-  if (S.ai) S.ai.findings.forEach(f=>{ if (inU(f.p) || (f.p==null && f.babAI && fold(f.babAI)===fold(unit))) T.push({src:f.reviewer||"Claude", f, occ:[{p:f.p,q:f.quote||""}]}); });
-  if (S.ai && S.ai.petunjuk) S.ai.petunjuk.forEach(pt=>{ const sec=REV_SECTIONS.find(s=>fold(pt.bagian).startsWith(fold(s).slice(0,6))); const bab=sec && REV_BAB[sec]; if (bab && fold(bab)===fold(unit)) T.push({src:"Editor", f:{title:pt.langkah, detail:"", fix:pt.contoh, sev:pt.prioritas==="wajib"?"error":"warning", cat:"editor"}, occ:[]}); });
+  L.all.filter(incl).forEach(f=>{ if (f.sev==="ok" || f.sev==="info" || f.cat==="format") return; const occ=(f.occ||[]).filter(o=>inU(o.p)); if (!occ.length && !inU(f.p)) return; T.push({src:"Sistem", f, occ:occ.length?occ:[{p:f.p,q:f.quote||""}]}); });
+  if (S.ai) S.ai.findings.filter(incl).forEach(f=>{ if (inU(f.p) || (f.p==null && f.babAI && fold(f.babAI)===fold(unit))) T.push({src:f.reviewer||"Claude", f, occ:[{p:f.p,q:f.quote||""}]}); });
+  if (S.ai && S.ai.petunjuk) S.ai.petunjuk.filter(incl).forEach(pt=>{ const sec=REV_SECTIONS.find(s=>fold(pt.bagian).startsWith(fold(s).slice(0,6))); const bab=sec && REV_BAB[sec]; if (bab && fold(bab)===fold(unit)) T.push({src:"Editor", f:{title:pt.langkah, detail:"", fix:pt.contoh, sev:pt.prioritas==="wajib"?"error":"warning", cat:"editor"}, occ:[]}); });
   return T.map((t,k)=>({id:"T"+(k+1), ...t}));
 }
 function findingLine(t){
@@ -2584,7 +2585,7 @@ function reviewComments(only){
     if (O.editor) out.push({who:"Editor", author:revName("Editor"), p:null, quote:"", lines:[`Keputusan editor untuk naskah ini adalah ${lowerDec(ai.keputusan)}.`, sentence(ai.ringkasan)]});
     if (O.umum) ai.reviewers.forEach(r=>out.push({who:r.nama, author:revName(r.nama), p:null, quote:"", lines:[`Rekomendasi saya untuk naskah ini adalah ${lowerDec(r.rekomendasi)}.`, sentence(r.ringkasan)]}));
     ai.findings.filter(incl).forEach(f=>out.push(finding(f.reviewer, revName(f.reviewer), f)));
-    if (O.editor) ai.petunjuk.forEach(pt=>{ const f = ai.findings.find(x=>x.p!=null && fold(x.kat).startsWith(fold(pt.bagian).slice(0,6))); out.push({who:"Editor", author:revName("Editor"), p:f?f.p:null, quote:"", kat:pt.bagian, lines:[adviceText(pt.langkah, pt.prioritas==="wajib").replace(/^Sebaiknya /,"Mohon "), pt.contoh?"Contohnya: "+plainText(pt.contoh).replace(/^contoh\s*:\s*/i,""):""]}); });
+    if (O.editor) ai.petunjuk.filter(incl).forEach(pt=>{ const f = ai.findings.find(x=>x.p!=null && fold(x.kat).startsWith(fold(pt.bagian).slice(0,6))); out.push({who:"Editor", author:revName("Editor"), p:f?f.p:null, quote:"", kat:pt.bagian, lines:[adviceText(pt.langkah, pt.prioritas==="wajib").replace(/^Sebaiknya /,"Mohon "), pt.contoh?"Contohnya: "+plainText(pt.contoh).replace(/^contoh\s*:\s*/i,""):""]}); });
   } else {
     ai.findings.filter(incl).forEach(f=>out.push(finding("Claude", revName("Claude"), f)));
   }
@@ -2902,8 +2903,8 @@ function vTemplate(){
     <div class="tbl-wrap"><table><tbody>${tplSpecRows().map(([k,v])=>`<tr><td style="text-align:left;font-weight:600;width:28%">${esc(k)}</td><td style="text-align:left">${esc(v)}</td></tr>`).join("")}</tbody></table></div>
     <div class="toolbar" style="margin:12px 0 0"><label class="btn sm" style="position:relative;overflow:hidden">Ganti template (.docx)<input type="file" id="tplIn" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>${T.builtin?"":`<button class="btn sm" data-act="tplreset">Kembali ke template Nusantara of Research</button>`}</div></div>`;
   if (!isArt()) return src + `<div class="card"><h3>Kesesuaian dengan template</h3><p class="small" style="margin:0">Pemeriksaan ini berlaku untuk artikel jurnal. Pilih <b>Dokumen: Artikel jurnal (${NOR_NAME})</b> di kanan atas, lalu tekan <b>Mulai analisis</b>.</p></div>`;
-  const rows=templateChecklist(); const M=S.local.M; const ok=rows.filter(r=>r.sev==="ok").length, chk=rows.filter(r=>r.sev!=="info").length;
-  const c = s => rows.filter(r=>r.sev===s).length;
+  const rows=templateChecklist(); const M=S.local.M; const RI=rows.filter(incl); const ok=RI.filter(r=>r.sev==="ok").length, chk=RI.filter(r=>r.sev!=="info").length;
+  const c = s => RI.filter(r=>r.sev===s).length;
   const kpi = `<div class="kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">${[["Kesesuaian",`${pct(ok,chk)}%`,`${ok} dari ${chk} aspek`,IC.check],["Sesuai",ok,"aspek",IC.check],["Tidak dapat diperiksa",c("info"),S.doc.source==="docx"?"aspek":"unggah .docx",IC.doc],["Perlu revisi",c("error")+c("warning"),`${c("error")} wajib · ${c("warning")} perhatian`,IC.warn]].map(([l,v,x,d])=>`<div class="kpi"><div class="ic">${icon(d)}</div><div><div class="lb">${l}</div><div class="v">${v}</div><div class="s">${x}</div></div></div>`).join("")}</div>`;
   const groups=[...new Set(rows.map(r=>r.grp))].map(g=>`<div class="card"><h3>${esc(g)}</h3><div class="tbl-wrap"><table><thead><tr><th style="width:34px"></th><th>Aspek</th><th>Ketentuan template</th><th>Hasil pemeriksaan</th><th>Status</th><th></th></tr></thead><tbody>${rows.filter(r=>r.grp===g).map(r=>`<tr class="${incl(r)?"":"excl"}"><td>${inclBox(r)}</td><td style="text-align:left;font-weight:600">${esc(r.aspek)}</td><td style="text-align:left">${esc(r.ketentuan)}</td><td style="text-align:left">${esc(r.terbaca)}</td><td>${sevPill(r.sev, SEV_TXT[r.sev])}</td><td>${r.p!=null&&M.paras[r.p]?`<button class="linkish" data-goto="${r.p}">Lihat →</button>`:""}</td></tr>`).join("")}</tbody></table></div></div>`).join("");
   return `${dlBar("template")}${src}${kpi}<div class="card" style="margin-top:16px">${inclBar("tpl","Aspek yang disertakan dalam laporan")}</div>${groups}`;
@@ -3058,6 +3059,8 @@ function scopeItems(scope){
   const [kind, cat] = scope.split(":");
   if (kind==="cat"){ const fl=S.filter[cat]||"all"; return S.local.all.filter(f=>f.cat===cat && (fl==="all"||f.sev===fl)); }
   if (kind==="ai") return S.ai ? S.ai.findings : [];
+  if (kind==="pet") return S.ai && S.ai.petunjuk ? S.ai.petunjuk : [];
+  if (kind==="iu") return S.inst ? S.inst.units.map(U=>({id:"IU:"+U.unit})) : [];
   if (kind==="rev") return S.ai && S.ai.mode==="review" ? (cat ? S.ai.findings.filter(f=>f.reviewer===cat) : S.ai.findings) : [];
   if (kind==="tpl") return isArt() && S.local ? templateChecklist() : [];
   if (kind==="act") return S.cmp && S.cmp.act ? S.cmp.act.rows : [];
@@ -3065,7 +3068,7 @@ function scopeItems(scope){
   if (kind==="gram") return S.gram && S.gram.items ? S.gram.items : [];
   if (kind==="sim") return S.sim && S.sim.rows ? S.sim.rows : [];
   if (kind==="aichk") return S.aicheck && S.aicheck.rows ? S.aicheck.rows : [];
-  if (kind==="all") return [...(S.local?S.local.all:[]), ...(S.ai?S.ai.findings:[]), ...(isArt()&&S.local?templateChecklist():[])];
+  if (kind==="all") return [...(S.local?S.local.all:[]), ...(S.ai?S.ai.findings:[]), ...(S.ai&&S.ai.petunjuk?S.ai.petunjuk:[]), ...(isArt()&&S.local?templateChecklist():[])];
   return [];
 }
 function inclBar(scope, label){
@@ -3175,9 +3178,9 @@ function runCompare(){
   al.forEach(x=>{
     const t=(x.b||x.a).text; if (isHeadLike(t)) sec=t.slice(0,60);
     const S_= bySec[sec] || (bySec[sec]={sec, chg:0, add:0, del:0, words:0});
-    if (x.a && x.b){ if (normSp(x.a.text)===normSp(x.b.text)){ same++; return; } const ops=diffOps(x.a.text, x.b.text); const wa=ops.filter(o=>o[0]==="+").reduce((s,o)=>s+words(o[1]).length,0), wd=ops.filter(o=>o[0]==="-").reduce((s,o)=>s+words(o[1]).length,0); if (!wa && !wd){ same++; return; } wAdd+=wa; wDel+=wd; chg++; S_.chg++; S_.words+=wa+wd; items.push({id:"D"+items.length, type:"ubah", sec, a:x.a.text, b:x.b.text, ops, wa, wd}); }
-    else if (x.b){ const w=words(x.b.text).length; wAdd+=w; add++; S_.add++; S_.words+=w; items.push({id:"D"+items.length, type:"tambah", sec, a:"", b:x.b.text, ops:[["+",x.b.text]], wa:w, wd:0}); }
-    else { const w=words(x.a.text).length; wDel+=w; del++; S_.del++; S_.words+=w; items.push({id:"D"+items.length, type:"hapus", sec, a:x.a.text, b:"", ops:[["-",x.a.text]], wa:0, wd:w}); }
+    if (x.a && x.b){ if (normSp(x.a.text)===normSp(x.b.text)){ same++; return; } const ops=diffOps(x.a.text, x.b.text); x.ops=ops; const wa=ops.filter(o=>o[0]==="+").reduce((s,o)=>s+words(o[1]).length,0), wd=ops.filter(o=>o[0]==="-").reduce((s,o)=>s+words(o[1]).length,0); if (!wa && !wd){ same++; return; } wAdd+=wa; wDel+=wd; chg++; S_.chg++; S_.words+=wa+wd; items.push(x.item={id:"D"+items.length, type:"ubah", sec, a:x.a.text, b:x.b.text, ops, wa, wd}); }
+    else if (x.b){ const w=words(x.b.text).length; wAdd+=w; add++; S_.add++; S_.words+=w; items.push(x.item={id:"D"+items.length, type:"tambah", sec, a:"", b:x.b.text, ops:[["+",x.b.text]], wa:w, wd:0}); }
+    else { const w=words(x.a.text).length; wDel+=w; del++; S_.del++; S_.words+=w; items.push(x.item={id:"D"+items.length, type:"hapus", sec, a:x.a.text, b:"", ops:[["-",x.a.text]], wa:0, wd:w}); }
   });
   const wA=A.paras.reduce((s,p)=>s+words(p.text).length,0), wB=B.paras.reduce((s,p)=>s+words(p.text).length,0);
   C.res = {al, items, stats:{pa:A.paras.length, pb:B.paras.length, same, chg, add, del, wAdd, wDel, wA, wB, pct: Math.round((wAdd+wDel)/Math.max(1,wA)*100)}, bySec:Object.values(bySec).filter(s=>s.chg||s.add||s.del)};
@@ -3229,8 +3232,8 @@ function vBanding(){
   html += dlBar("banding") + `<div class="kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">${[["Paragraf diubah",s.chg,`${s.same} tetap`,IC.doc],["Paragraf ditambah",s.add,`${s.wAdd} kata masuk`,IC.check],["Paragraf dihapus",s.del,`${s.wDel} kata keluar`,IC.x],["Intensitas revisi",`${s.pct}%`,`${s.wA} → ${s.wB} kata`,IC.score||IC.info]].map(([l,v,x,d])=>`<div class="kpi"><div class="ic">${icon(d)}</div><div><div class="lb">${l}</div><div class="v">${v}</div><div class="s">${x}</div></div></div>`).join("")}</div>`;
   if (C.res.bySec.length) html += `<div class="card" style="margin-top:16px"><h3>Sebaran perubahan per bagian</h3><div class="tbl-wrap"><table><thead><tr><th>Bagian</th><th>Diubah</th><th>Ditambah</th><th>Dihapus</th><th>Kata terdampak</th></tr></thead><tbody>${C.res.bySec.map(b=>`<tr><td style="text-align:left">${esc(b.sec)}</td><td>${b.chg}</td><td>${b.add}</td><td>${b.del}</td><td>${b.words}</td></tr>`).join("")}</tbody></table></div></div>`;
   if (C.act){
-    const R=C.act.rows; const cnt=k=>R.filter(r=>r.status===k).length; const done=cnt("dilaksanakan");
-    html += `<div class="card" style="margin-top:16px"><h3>Analisis aktivitas revisi<span class="r">${C.act.busy?"Claude menilai…":R.length?`${done} dari ${R.length} saran dilaksanakan (${pct(done,R.length)}%)`:""}</span></h3>
+    const R=C.act.rows; const RI=R.filter(incl); const cnt=k=>RI.filter(r=>r.status===k).length; const done=cnt("dilaksanakan");
+    html += `<div class="card" style="margin-top:16px"><h3>Analisis aktivitas revisi<span class="r">${C.act.busy?"Claude menilai…":RI.length?`${done} dari ${RI.length} saran tercentang dilaksanakan (${pct(done,RI.length)}%)`:""}</span></h3>
       ${C.act.note?`<p class="small muted" style="margin:0 0 10px">${esc(C.act.note)}</p>`:""}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${Object.entries(ACT_LAB).filter(([k])=>cnt(k)).map(([k,[l,sv]])=>sevPill(sv,`${l}: ${cnt(k)}`)).join("")}</div>
       ${inclBar("act","Saran yang disertakan dalam laporan")}
@@ -3252,7 +3255,7 @@ async function buildTrackedDocx(){
   const rp = `<w:rPr><w:rFonts w:ascii="${F}" w:hAnsi="${F}" w:cs="${F}"/><w:sz w:val="24"/></w:rPr>`;
   const run = (t,del) => del ? `<w:r>${rp}<w:delText xml:space="preserve">${xmlEsc(t)}</w:delText></w:r>` : `<w:r>${rp}<w:t xml:space="preserve">${xmlEsc(t)}</w:t></w:r>`;
   const au = xmlEsc(String(revNames()["Penulis"]||"Revisi penulis"));
-  const body = C.res.al.map(x=>{ const t=(x.b||x.a).text; const head=isHeadLike(t); const ppr=`<w:pPr><w:spacing w:after="120"/><w:jc w:val="${head?"left":"both"}"/>${x.a&&!x.b?`<w:rPr><w:del w:id="${id++}" w:author="${au}" w:date="${date}"/></w:rPr>`:x.b&&!x.a?`<w:rPr><w:ins w:id="${id++}" w:author="${au}" w:date="${date}"/></w:rPr>`:""}</w:pPr>`;
+  const body = C.res.al.map(x=>{ if (x.item && !incl(x.item)){ if (!x.b) return ""; x={a:x.b, b:x.b}; } const t=(x.b||x.a).text; const head=isHeadLike(t); const ppr=`<w:pPr><w:spacing w:after="120"/><w:jc w:val="${head?"left":"both"}"/>${x.a&&!x.b?`<w:rPr><w:del w:id="${id++}" w:author="${au}" w:date="${date}"/></w:rPr>`:x.b&&!x.a?`<w:rPr><w:ins w:id="${id++}" w:author="${au}" w:date="${date}"/></w:rPr>`:""}</w:pPr>`;
     const ops = x.a && x.b ? diffOps(x.a.text, x.b.text) : x.a ? [["-",x.a.text]] : [["+",x.b.text]];
     return `<w:p>${ppr}${ops.map(([o,s])=>o==="="?run(s):o==="-"?`<w:del w:id="${id++}" w:author="${au}" w:date="${date}">${run(s,true)}</w:del>`:`<w:ins w:id="${id++}" w:author="${au}" w:date="${date}">${run(s)}</w:ins>`).join("")}</w:p>`; }).join("");
   const {pack} = docKit(F); return pack(body);
@@ -3335,8 +3338,8 @@ function vSimilarity(){
     ${Z.refs.length?`<p class="small" style="margin:10px 0 0">Pembanding: ${Z.refs.map((r,k)=>`<span class="chip">${esc(r.name)} <button class="linkish" data-simrefdel="${k}">×</button></span>`).join(" ")}</p>`:""}
     ${Z.err?`<div class="notice err" style="margin-top:10px">${icon(IC.warn)}<div>${esc(Z.err)}</div></div>`:""}</div>`;
   if (!Z.rows) return html;
-  const R=Z.rows; const idx = R.length ? Math.round(R.reduce((a,r)=>a+r.o,0)/R.length) : 0; const hi=R.filter(r=>r.o>=50).length;
-  return dlBar("similarity") + html + `<div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">${[["Indeks kemiripan sampel",`${idx}%`,`rata-rata ${R.length} kalimat`,IC.quote],["Kalimat mirip (≥ 50%)",hi,`dari ${R.length} kalimat`,IC.warn],["Kalimat orisinal (< 50%)",R.length-hi,"tidak ditemukan padanan",IC.check]].map(([l,v,x,d])=>`<div class="kpi"><div class="ic">${icon(d)}</div><div><div class="lb">${l}</div><div class="v">${v}</div><div class="s">${x}</div></div></div>`).join("")}</div>
+  const R=Z.rows; const RI=R.filter(incl); const idx = RI.length ? Math.round(RI.reduce((a,r)=>a+r.o,0)/RI.length) : 0; const hi=RI.filter(r=>r.o>=50).length;
+  return dlBar("similarity") + html + `<div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">${[["Indeks kemiripan sampel",`${idx}%`,`rata-rata ${RI.length} kalimat tercentang`,IC.quote],["Kalimat mirip (≥ 50%)",hi,`dari ${RI.length} kalimat`,IC.warn],["Kalimat orisinal (< 50%)",RI.length-hi,"tidak ditemukan padanan",IC.check]].map(([l,v,x,d])=>`<div class="kpi"><div class="ic">${icon(d)}</div><div><div class="lb">${l}</div><div class="v">${v}</div><div class="s">${x}</div></div></div>`).join("")}</div>
     <div class="card" style="margin-top:16px">${inclBar("sim")}<div class="flist">${R.map(r=>`<article class="f sev-${simSev(r.o)} ${incl(r)?"":"excl"}"><div class="f-head">${inclBox(r)}<h4>Kemiripan ${r.o}%</h4>${sevPill(simSev(r.o), r.o>=80?"Sangat mirip":r.o>=50?"Mirip":"Orisinal")}</div><div class="q">${esc(r.s)}</div>${r.src&&r.o>0?`<p class="small" style="margin:6px 0 0">Sumber terdekat: ${esc(r.src)}${r.url?` · <a class="linkish" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.url)}</a>`:""}</p>`:""}<div class="meta"><button class="linkish" data-goto="${r.p}">Lihat di naskah →</button></div></article>`).join("")}</div></div>`;
 }
 
@@ -3375,12 +3378,12 @@ const aiSev = s => s>=60?"error":s>=35?"warning":"ok";
 const aiLab = s => s>=60?"Indikasi tinggi":s>=35?"Indikasi sedang":"Indikasi rendah";
 function vAICheck(){
   const X=aiState(); if (!X.rows) runAICheck();
-  const R=X.rows; const hi=R.filter(r=>r.score>=60).length, md=R.filter(r=>r.score>=35&&r.score<60).length;
+  const R=X.rows; const RI=R.filter(incl); const tw=RI.reduce((a,r)=>a+words(r.text).length,0)||1; const ov=RI.length?Math.round(RI.reduce((a,r)=>a+r.score*words(r.text).length,0)/tw):0; X.overall=ov; const hi=RI.filter(r=>r.score>=60).length, md=RI.filter(r=>r.score>=35&&r.score<60).length;
   return dlBar("aicheck") + `<div class="card" style="margin-bottom:16px"><h3>Cek penggunaan AI<span class="r">indikatif</span></h3>
     <p class="small muted" style="margin:0 0 10px">Setiap paragraf dinilai dari ciri gaya yang sering muncul pada teks buatan AI: frasa klise (mis. "memainkan peran penting", "it is important to note", "delve"), panjang kalimat yang terlalu seragam, dan transisi berulang. Claude dapat memberi penilaian kedua. <b>Hasil ini bukan bukti</b>: detektor AI dapat keliru, termasuk menandai tulisan manusia yang rapi. Gunakan sebagai bahan diskusi dengan penulis.</p>
     <div class="toolbar" style="margin:0"><button class="btn sm" data-act="aichk">Hitung ulang</button>${X.busy?`<span class="small"><span class="spinner" style="width:14px;height:14px;display:inline-block;vertical-align:middle"></span> Claude menilai…</span>`:`<button class="btn primary sm" data-act="aiclaude" ${S.sample?"":"disabled"}>${X.claude?"Nilai ulang dengan Claude":"Minta penilaian Claude"}</button>`}</div>
     ${X.err?`<div class="notice err" style="margin-top:10px">${icon(IC.warn)}<div>${esc(X.err)}</div></div>`:""}${X.claude?`<p class="small" style="margin:10px 0 0"><b>Penilaian Claude: ${X.claude.keseluruhan}%</b> · ${esc(X.claude.ringkasan)}</p>`:""}</div>
-    <div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">${[["Skor indikasi AI",`${X.overall}%`,aiLab(X.overall),IC.info],["Paragraf indikasi tinggi",hi,`dari ${R.length} paragraf`,IC.warn],["Paragraf indikasi sedang",md,"perlu dicermati",IC.doc]].map(([l,v,x,d])=>`<div class="kpi"><div class="ic">${icon(d)}</div><div><div class="lb">${l}</div><div class="v">${v}</div><div class="s">${x}</div></div></div>`).join("")}</div>
+    <div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">${[["Skor indikasi AI",`${X.overall}%`,aiLab(X.overall),IC.info],["Paragraf indikasi tinggi",hi,`dari ${RI.length} paragraf tercentang`,IC.warn],["Paragraf indikasi sedang",md,"perlu dicermati",IC.doc]].map(([l,v,x,d])=>`<div class="kpi"><div class="ic">${icon(d)}</div><div><div class="lb">${l}</div><div class="v">${v}</div><div class="s">${x}</div></div></div>`).join("")}</div>
     <div class="card" style="margin-top:16px">${inclBar("aichk")}<div class="flist">${[...R].sort((a,b)=>b.score-a.score).map(r=>`<article class="f sev-${aiSev(r.score)} ${incl(r)?"":"excl"}"><div class="f-head">${inclBox(r)}<h4>${aiLab(r.score)} · ${r.score}%${r.claude?` · Claude ${r.claude.skor}%`:""}</h4><span class="chip">${esc(r.bab)}</span></div><div class="q">${esc(r.text.slice(0,420))}${r.text.length>420?"…":""}</div><p class="small" style="margin:6px 0 0">${r.hits.length?`Frasa khas: ${r.hits.slice(0,8).map(h=>`“${esc(h)}”`).join(", ")}. `:""}Variasi panjang kalimat ${r.cv} (rendah = seragam), rata-rata ${r.mean} kata per kalimat.${r.claude?` <b>Claude:</b> ${esc(r.claude.alasan)}`:""}</p><div class="meta"><button class="linkish" data-goto="${r.p}">Lihat di naskah →</button></div></article>`).join("")||`<p class="empty">Tidak ada paragraf yang cukup panjang (≥ 50 kata).</p>`}</div></div>`;
 }
 
@@ -3389,7 +3392,7 @@ const INST_ACT = {tetap:"Dipertahankan", ubah:"Diperbaiki", gabung:"Digabung", p
 function instantPrompt(unit, ps, T, sources, outline, part){
   const art=isArt();
   const srcBlock = sources.length ? `SUMBER TERVERIFIKASI (boleh dikutip HANYA jika isinya mendukung kalimat, dan HANYA dengan bentuk kutipan yang tertulis):\n${sources.map(s=>`[${s.id}] ${s.cite.nar} / ${s.cite.par} — "${s.title}". ${s.journal}${s.quartile?` [${s.quartile}]`:""}. Ringkasan: ${s.abstract}`).join("\n")}` : "SUMBER BARU: tidak tersedia. Gunakan hanya rujukan yang sudah ada di naskah.";
-  const ed = S.ai && S.ai.petunjuk ? S.ai.petunjuk.filter(pt=>{ const sec=REV_SECTIONS.find(s=>fold(pt.bagian).startsWith(fold(s).slice(0,6))); return sec && REV_BAB[sec] && fold(REV_BAB[sec])===fold(unit); }).map(pt=>`- (${pt.prioritas}) ${pt.langkah}${pt.contoh?` Contoh: ${pt.contoh}`:""}`) : [];
+  const ed = S.ai && S.ai.petunjuk ? S.ai.petunjuk.filter(incl).filter(pt=>{ const sec=REV_SECTIONS.find(s=>fold(pt.bagian).startsWith(fold(s).slice(0,6))); return sec && REV_BAB[sec] && fold(REV_BAB[sec])===fold(unit); }).map(pt=>`- (${pt.prioritas}) ${pt.langkah}${pt.contoh?` Contoh: ${pt.contoh}`:""}`) : [];
   return `Anda editor senior ${art?`jurnal ${NOR_NAME}`:"dan dosen pembimbing skripsi"} yang menyiapkan naskah agar SIAP ${art?"TERBIT":"DIUJIKAN"}. Tugas: tulis ulang bagian "${unit}"${part?` (potongan ${part})`:""} secara utuh sehingga logis, sistematis, runtut, dan harmonis dengan bagian lain, serta menyelesaikan SEMUA masukan di bawah.
 
 ACUAN:
@@ -3479,7 +3482,7 @@ async function runInstant(){
 }
 /* susunan paragraf hasil revisi instan (bentuk sama dengan revisedParas) */
 function instantParas(){
-  const M=S.local.M; const done = new Map((S.inst?S.inst.units:[]).filter(U=>U.items.length).map(U=>[U.unit,U]));
+  const M=S.local.M; const done = new Map((S.inst?S.inst.units:[]).filter(U=>U.items.length && incl({id:"IU:"+U.unit})).map(U=>[U.unit,U]));
   const out=[]; const emitted=new Set();
   M.paras.forEach(p=>{
     const U=done.get(p.bab);
@@ -3504,7 +3507,7 @@ function instantParas(){
   return out;
 }
 function instStats(){
-  const U=(S.inst?S.inst.units:[]); const it=U.flatMap(u=>u.items.filter(x=>x.jenis!=="objek"));
+  const U=(S.inst?S.inst.units:[]).filter(u=>incl({id:"IU:"+u.unit})); const it=U.flatMap(u=>u.items.filter(x=>x.jenis!=="objek"));
   const c=k=>it.filter(x=>x.aksi===k).length;
   return {paragraf:it.length, baru:c("baru"), ubah:c("ubah"), gabung:c("gabung"), pecah:c("pecah"), pindah:c("pindah"), tetap:c("tetap"), cek:U.reduce((a,u)=>a+u.cek.length,0), sumber:(S.inst?S.inst.sources.filter(s=>s.used).length:0)};
 }
@@ -3520,9 +3523,9 @@ function vInstant(){
   if (I.busy || I.srcNote) html += `<div class="card" style="margin-bottom:16px"><ul class="steps">${I.srcNote?`<li class="done"><span class="dot sev-ok">${icon(IC.check)}</span>Sumber: ${esc(I.srcNote)}</li>`:""}${I.units.map(U=>`<li class="${U.st==="done"?"done":""}">${U.st==="run"?`<div class="spinner"></div>`:U.st==="done"?`<span class="dot sev-ok">${icon(IC.check)}</span>`:U.st==="fail"?`<span class="dot sev-error">${icon(IC.x)}</span>`:`<span class="dot sev-info" style="opacity:.4">${icon("M12 12h.01")}</span>`}${esc(U.unit)}${U.st==="done"?` <span class="muted small">· ${U.items.filter(x=>x.jenis!=="objek").length} unit teks</span>`:""}${U.err?` <span class="small" style="color:var(--bad,#c0392b)">${esc(U.err)}</span>`:""}</li>`).join("")}</ul></div>`;
   if (!I.done) return html;
   html += `<div class="kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">${[["Paragraf baru",st.baru,"ditambahkan",IC.check],["Diperbaiki",st.ubah+st.gabung+st.pecah,`${st.gabung} digabung · ${st.pecah} dipecah`,IC.doc],["Dipindah",st.pindah,"bongkar pasang urutan",IC.info],["Perlu dicek",st.cek,`${st.sumber} sumber baru dipakai`,IC.warn]].map(([l,v,x,d])=>`<div class="kpi"><div class="ic">${icon(d)}</div><div><div class="lb">${l}</div><div class="v">${v}</div><div class="s">${x}</div></div></div>`).join("")}</div>
-    <div class="toolbar" style="margin:16px 0"><button class="btn primary" data-act="instdocx">Unduh naskah siap publish (.docx)</button>${isArt()?`<button class="btn" data-act="insttpl">Kemas ke template ${esc(NOR_NAME)} (.docx)</button>`:""}<button class="btn" data-secdl="instan:docx">Laporan revisi instan (.docx)</button><button class="btn" data-secdl="instan:pdf">Laporan (.pdf)</button></div>`;
+    <div class="toolbar" style="margin:16px 0"><button class="btn primary" data-act="instdocx">Unduh naskah siap publish (.docx)</button>${isArt()?`<button class="btn" data-act="insttpl">Kemas ke template ${esc(NOR_NAME)} (.docx)</button>`:""}<button class="btn" data-secdl="instan:docx">Laporan revisi instan (.docx)</button><button class="btn" data-secdl="instan:pdf">Laporan (.pdf)</button></div>${inclBar("iu","Bagian hasil revisi instan yang dipakai di naskah dan laporan")}<p class="small muted" style="margin:-4px 0 12px">Bagian yang tidak dicentang memakai teks asli di naskah .docx dan tidak masuk laporan.</p>`;
   html += I.units.filter(U=>U.items.length||U.err).map(U=>{ const M=S.local.M; const before=M.paras.filter(p=>p.bab===U.unit && !p.isBab && p.text && p.tag!=="img" && p.tag!=="table").map(p=>p.text).join("\n\n"); const after=U.items.filter(x=>x.jenis!=="objek").map(x=>x.teks).join("\n\n");
-    return `<section class="card babcard" style="margin-bottom:16px"><div class="babhead"><h3>${esc(U.unit)}</h3>${U.err?sevPill("error",U.err):""}</div>
+    return `<section class="card babcard ${incl({id:"IU:"+U.unit})?"":"excl"}" style="margin-bottom:16px"><div class="babhead">${inclBox({id:"IU:"+U.unit, title:U.unit})}<h3>${esc(U.unit)}</h3>${U.err?sevPill("error",U.err):""}${incl({id:"IU:"+U.unit})?"":`<span class="chip">teks asli dipakai</span>`}</div>
       ${U.ringkasan?`<p class="small" style="margin:0 0 10px"><b>Yang dilakukan:</b> ${esc(U.ringkasan)}</p>`:""}
       ${U.cek.length?`<div class="notice" style="margin-bottom:10px">${icon(IC.warn)}<div><b>Perlu dicek penulis:</b><ul class="blist small" style="margin-top:4px">${[...new Set(U.cek)].map(c=>`<li>${esc(c)}</li>`).join("")}</ul></div></div>`:""}
       <details><summary class="small" style="cursor:pointer;font-weight:600">Lihat hasil (${U.items.filter(x=>x.jenis!=="objek").length} unit teks)</summary>
@@ -3675,7 +3678,7 @@ function similarityModel(){
       {h:"Lampiran: Semua Kalimat yang Diperiksa"}, {table:{head:["No","Kalimat","Kemiripan"], w:[6,80,14], rows:R.map((r,k)=>[cell(k+1,{al:"center"}), r.s, cell(`${r.o}%`,{fill:SEV_FILL[simSev(r.o)],al:"center"})])}}], file:"Laporan_Cek_Similarity"};
 }
 function aicheckModel(){
-  const X=aiState(); if (!X.rows) runAICheck(); const R=[...X.rows].filter(incl).sort((a,b)=>b.score-a.score); const hi=R.filter(r=>r.score>=35);
+  const X=aiState(); if (!X.rows) runAICheck(); const R=[...X.rows].filter(incl).sort((a,b)=>b.score-a.score); const hi=R.filter(r=>r.score>=35); const tw=R.reduce((a,r)=>a+words(r.text).length,0)||1; X.overall=R.length?Math.round(R.reduce((a,r)=>a+r.score*words(r.text).length,0)/tw):0;
   return {title:"Laporan Cek Penggunaan AI (Indikatif)", sub:"Berdasarkan ciri gaya bahasa; bukan bukti penggunaan AI", info:baseInfo(), gauge:{v:X.overall, label:"Indikasi penggunaan AI", unit:"%", lowerBetter:true}, kpis:[["Paragraf diperiksa",R.length],["Indikasi tinggi",R.filter(r=>r.score>=60).length],["Indikasi sedang",R.filter(r=>r.score>=35&&r.score<60).length],["Penilaian Claude",X.claude?`${X.claude.keseluruhan}%`:"—"]],
     summary:`Skor indikasi penggunaan AI ${X.overall}% (${bandOf(X.overall,true)}).${X.claude?` Penilaian Claude: ${X.claude.keseluruhan}%. ${X.claude.ringkasan}`:""} ${hi.length} paragraf sebaiknya ditulis ulang dengan gaya penulis sendiri. Hasil ini indikatif dan perlu dikonfirmasi dengan penulis.`,
     blocks:[{h:"Paragraf yang Perlu Direvisi"}, {table:{head:["No","Bagian","Cuplikan paragraf","Skor","Cara memperbaiki"], w:[5,12,41,10,32], empty:"Tidak ada paragraf dengan indikasi sedang atau tinggi.", rows:hi.map((r,k)=>[cell(k+1,{al:"center"}), r.bab||"-", r.text.slice(0,280)+(r.text.length>280?"…":""), cell(`${r.score}%`,{fill:SEV_FILL[aiSev(r.score)],al:"center"}), `${r.hits.length?`Ganti frasa klise (${r.hits.slice(0,4).join(", ")}). `:""}Tambahkan data dan konteks spesifik penelitian, variasikan panjang kalimat, dan tulis dengan gaya sendiri.`])}}], file:"Laporan_Cek_Penggunaan_AI"};
@@ -3693,9 +3696,9 @@ function bandingModel(){
     summary: R.length ? `${done} dari ${R.length} saran sudah dilaksanakan (${v}%, ${bandOf(v)}). ${pend.length?`${pend.length} saran belum tuntas dan tercantum pada tabel di bawah.`:"Semua saran sudah dikerjakan."} Penulis mengubah ${s.chg} paragraf, menambah ${s.add}, dan menghapus ${s.del} (intensitas revisi ${s.pct}%).` : `Penulis mengubah ${s.chg} paragraf, menambah ${s.add}, dan menghapus ${s.del}; intensitas revisi ${s.pct}% dari jumlah kata awal. Unggah dokumen saran revisi untuk menilai apakah setiap saran sudah dikerjakan.`, blocks, file:"Laporan_Perbandingan_Revisi"};
 }
 function instantModel(){
-  const I=S.inst; const st=instStats(); const cek=I.units.flatMap(U=>[...new Set(U.cek)].map(c=>[U.unit,c]));
+  const I=S.inst; const st=instStats(); const IU=I.units.filter(U=>incl({id:"IU:"+U.unit})); const cek=IU.flatMap(U=>[...new Set(U.cek)].map(c=>[U.unit,c]));
   const blocks=[{h:"Hal yang Perlu Dicek Penulis"}, {table:{head:["No",isArt()?"Bagian":"Bab","Yang perlu dicek"], w:[6,22,72], empty:"Tidak ada hal yang perlu dicek.", rows:cek.map(([u,c],k)=>[cell(k+1,{al:"center"}), u, c])}},
-    {h:"Lampiran: Yang Dilakukan per Bagian"}, {table:{head:[isArt()?"Bagian":"Bab","Yang dilakukan"], w:[22,78], rows:I.units.map(U=>[cell(U.unit,{b:true}), U.ringkasan||(U.err||"—")])}}];
+    {h:"Lampiran: Yang Dilakukan per Bagian"}, {table:{head:[isArt()?"Bagian":"Bab","Yang dilakukan"], w:[22,78], rows:IU.map(U=>[cell(U.unit,{b:true}), U.ringkasan||(U.err||"—")])}}];
   const used=I.sources.filter(s=>s.used); if (used.length) blocks.push({h:"Lampiran: Sumber Baru yang Dipakai"}, {table:{head:["No","Referensi (APA 7)"], w:[6,94], rows:used.map((s,k)=>[cell(k+1,{al:"center"}), s.ref.replace(/\*/g,"")])}});
   return {title:"Laporan Revisi Instan", sub:acuanLabel(), info:baseInfo(), kpis:[["Paragraf baru",st.baru],["Diperbaiki",st.ubah+st.gabung+st.pecah],["Dipindah",st.pindah],["Perlu dicek",st.cek]],
     summary:`Naskah ditulis ulang menjadi ${st.paragraf} unit teks: ${st.baru} paragraf baru, ${st.ubah} diperbaiki, ${st.gabung} digabung, ${st.pecah} dipecah, dan ${st.pindah} dipindah agar alurnya logis dan runtut.${st.sumber?` ${st.sumber} sumber terverifikasi baru dipakai.`:""} Tidak ada data atau angka baru yang ditambahkan; ${st.cek} hal perlu dipastikan penulis.`, blocks, file:"Laporan_Revisi_Instan"};
@@ -3704,7 +3707,8 @@ function reviewModel(){
   const ai=S.ai; const rev=ai.mode==="review";
   if (!rev){ const fs=ai.findings.filter(incl); return {title:"Laporan Tinjauan Claude", sub:acuanLabel(), info:baseInfo(), gauge:{v:ai.skor, label:"Skor tinjauan"}, kpis:[["Wajib direvisi",fs.filter(f=>f.sev==="error").length],["Disarankan",fs.filter(f=>f.sev==="warning").length]], summary:ai.ringkasan, blocks:[{h:"Bagian yang Perlu Direvisi"}, {table:revisionTable(fs)}], file:"Laporan_Tinjauan"}; }
   const coms=ai.reviewers.flatMap(r=>r.bagian.flatMap(b=>b.komentar)).filter(incl);
-  const rows = ai.petunjuk.length ? ai.petunjuk.map((p,k)=>[cell(k+1,{al:"center"}), p.bagian, p.langkah, p.contoh||"—", PRIO(p.prioritas==="wajib"?"error":"warning")]) : coms.filter(c=>c.sev!=="info").map((c,k)=>[cell(k+1,{al:"center"}), c.kat, c.title, c.fix||"—", PRIO(c.sev)]);
+  const pets = ai.petunjuk.filter(incl);
+  const rows = ai.petunjuk.length ? pets.map((p,k)=>[cell(k+1,{al:"center"}), p.bagian, p.langkah, p.contoh||"—", PRIO(p.prioritas==="wajib"?"error":"warning")]) : coms.filter(c=>c.sev!=="info").map((c,k)=>[cell(k+1,{al:"center"}), c.kat, c.title, c.fix||"—", PRIO(c.sev)]);
   const blocks=[{h:"Bagian yang Perlu Direvisi"}, {table:{head:["No","Bagian","Yang perlu direvisi","Contoh / cara memperbaiki","Prioritas"], w:[5,15,36,32,12], empty:"Tidak ada petunjuk revisi.", rows}},
     {h:"Lampiran A: Nilai per Bagian"}, {table:{head:["Bagian", ...ai.reviewers.map(r=>revName(r.nama))], w:[34, ...ai.reviewers.map(()=>66/ai.reviewers.length)], rows:revSecs().map(s=>[s, ...ai.reviewers.map(r=>{ const b=r.bagian.find(x=>x.bagian===s); return cell(b?String(b.nilai):"-",{al:"center"}); })])}}];
   ai.reviewers.forEach((r,ri)=>{ const rr=[]; r.bagian.forEach(b=>b.komentar.filter(incl).forEach(c=>rr.push([cell(rr.length+1,{al:"center"}), b.bagian, c.quote?`“${c.quote}”`:"—", c.title, c.fix||"-", PRIO(c.sev==="info"?"warning":c.sev)])));
@@ -3726,6 +3730,16 @@ function dedupeReviewers(revs){
   const seen=[]; let removed=0;
   revs.forEach(r=>r.bagian.forEach(b=>{ b.komentar=b.komentar.filter(c=>{ const ts=tokSet(c.title+" "+(c.fix||"")); const dup=seen.some(s=>s.bag===b.bagian && s.rev!==r.nama && (jacc(s.ts,ts)>=0.45 || (c.quote && s.q && normSp(c.quote)===normSp(s.q) && jacc(s.ts,ts)>=0.25))); if (dup){ removed++; return false; } seen.push({bag:b.bagian, rev:r.nama, ts, q:c.quote}); return true; }); }));
   return removed;
+}
+
+
+/* ═════════════ SKOR LANGSUNG MENGIKUTI CENTANG ═════════════ */
+function recalcLocal(){
+  const L=S.local; if (!L || !L.all) return;
+  const fs=L.all.filter(incl); const by={}; Object.keys(CAT).forEach(c=>by[c]={error:0,warning:0,ok:0,info:0}); fs.forEach(f=>{ if (by[f.cat]) by[f.cat][f.sev]++; });
+  let pen=0; const parts={}; for (const c of Object.keys(WEIGHTS)){ const w=WEIGHTS[c]; const v=Math.min(w.cap, by[c].error*w.e + by[c].warning*w.w); parts[c]=v; pen+=v; }
+  L.by=by; L.parts=parts; L.score=Math.max(0,Math.round(100-pen));
+  (L.babs||[]).forEach(b=>{ const bf=fs.filter(f=>f.sev!=="ok" && f.p!=null && L.M.paras[f.p] && L.M.paras[f.p].bab===b.bab); b.err=bf.filter(f=>f.sev==="error").length; b.warn=bf.filter(f=>f.sev==="warning").length; b.byCat=Object.keys(CAT).map(c=>bf.filter(f=>f.cat===c).length); b.sitasi=bf.filter(f=>f.cat==="sitasi"&&f.sev==="error").length; b.bahasa=bf.filter(f=>f.cat==="bahasa").reduce((a,f)=>a+(f.occ?f.occ.filter(o=>L.M.paras[o.p]?.bab===b.bab).length:1),0); });
 }
 
 /* ═════════════ RUN ═════════════ */
@@ -4060,6 +4074,7 @@ function renderNav(){
   $("#railfoot").innerHTML = art ? `<strong>Template Nusantara of Research</strong>Judul, abstrak bilingual, Arial Narrow, enam bagian artikel, dan minimal 15 rujukan.` : `<strong>Pedoman KTI 2025</strong>Pemeriksaan otomatis berjalan di perangkat Anda. Tinjauan Claude memakai akun Claude Anda sendiri.`;
 }
 function render(){
+  try{ recalcLocal(); }catch(e){ console.warn(e); }
   if (!S.doc && !["admin","banding"].includes(S.view)) S.view="unggah";
   renderNav();
   const needsLocal = !["unggah","chat","admin","banding"].includes(S.view);
