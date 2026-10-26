@@ -574,12 +574,13 @@ const NAV = [
   ["banding","Bandingkan Revisi","M8 3v18M16 3v18M3 8h5M3 16h5M16 8h5M16 16h5"],
   ["copyedit","Copyediting","M4 4h16v16H4zM8 8h8M8 12h8M8 16h5M15 15l2 2 3-4"],
   ["admin","LOA & Invoice","M6 3h9l4 4v14H6V3Zm9 0v4h4M9 12h7M9 16h7M9 8h3"],
+  ["ojs","Siap Publish (OJS)","M4 4h16v12H4zM8 20h8M12 16v4M8 9l3 3 5-5"],
   ["chat","Tanya Pembimbing","M4 5h16v11H9l-5 4V5Zm4 5h8M8 8h5"],
   ["unggah","Unggah Naskah","M12 16V4m0 0-4 4m4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"]
 ];
 function viewMeta(v){
   const a=isArt();
-  return ({overview:["Ringkasan",a?"Kepatuhan artikel terhadap template Nusantara of Research":"Kepatuhan naskah terhadap pedoman"],perbab:[a?"Per Bagian":"Per Bab",a?"Statistik dan temuan setiap bagian artikel":"Statistik dan temuan setiap bab"],naskah:["Naskah","Temuan ditandai langsung pada teks"],struktur:[a?"Struktur Artikel":"Struktur Bab",a?"Urutan dan format judul bagian":"Kelengkapan dan urutan sub-bab wajib"],isi:[a?"Isi per Bagian":"Isi per Bab",a?"Ketentuan isi setiap bagian artikel":"Pemeriksaan isi khas setiap bab"],abstrak:[a?"Judul & Abstrak":"Abstrak",a?"Judul, penulis, ABSTRACT, ABSTRAK, kata kunci":"Panjang, unsur, dan kata kunci"],bahasa:["Ejaan & Diksi","Typo, tanda baca, dan istilah · bahasa Indonesia dan Inggris"],sitasi:["Sitasi & Pustaka",a?"APA edisi 7: kutipan dalam teks dan daftar rujukan":"Format APA dan kecocokan rujukan"],visual:["Tabel & Gambar","Letak, perataan, dan penomoran keterangan"],format:["Format Dokumen",a?"Huruf Arial Narrow, ukuran, perataan":"Kertas, margin, huruf, dan spasi"],ai:a?["Review Reviewer","Simulasi 1–3 reviewer dan editor jurnal"]:["Tinjauan Claude","Substansi, konsistensi, dan typo"],revisi:["Revisi Naskah","Perbaikan per bagian berdasarkan semua temuan"],copyedit:["Copyediting","Kemas ulang artikel sesuai template jurnal"],template:["Kesesuaian Template","Dibandingkan dengan template resmi Nusantara of Research"],banding:["Bandingkan Revisi","Perbedaan redaksi dan aktivitas revisi: naskah awal, saran, dan naskah revisi"],grammar:["Cek Grammar","Tata bahasa Indonesia dan Inggris"],similarity:["Cek Similarity","Kemiripan dengan literatur terindeks (indikatif)"],aicheck:["Cek Penggunaan AI","Indikasi teks buatan AI (indikatif)"],admin:["LOA & Invoice","Surat penerimaan dan tagihan dari data artikel"],chat:["Tanya Pembimbing","Diskusikan naskah Anda dengan Claude"],unggah:["Unggah Naskah","Unggah .docx, .pdf, .txt atau tempel teks"]})[v];
+  return ({overview:["Ringkasan",a?"Kepatuhan artikel terhadap template Nusantara of Research":"Kepatuhan naskah terhadap pedoman"],perbab:[a?"Per Bagian":"Per Bab",a?"Statistik dan temuan setiap bagian artikel":"Statistik dan temuan setiap bab"],naskah:["Naskah","Temuan ditandai langsung pada teks"],struktur:[a?"Struktur Artikel":"Struktur Bab",a?"Urutan dan format judul bagian":"Kelengkapan dan urutan sub-bab wajib"],isi:[a?"Isi per Bagian":"Isi per Bab",a?"Ketentuan isi setiap bagian artikel":"Pemeriksaan isi khas setiap bab"],abstrak:[a?"Judul & Abstrak":"Abstrak",a?"Judul, penulis, ABSTRACT, ABSTRAK, kata kunci":"Panjang, unsur, dan kata kunci"],bahasa:["Ejaan & Diksi","Typo, tanda baca, dan istilah · bahasa Indonesia dan Inggris"],sitasi:["Sitasi & Pustaka",a?"APA edisi 7: kutipan dalam teks dan daftar rujukan":"Format APA dan kecocokan rujukan"],visual:["Tabel & Gambar","Letak, perataan, dan penomoran keterangan"],format:["Format Dokumen",a?"Huruf Arial Narrow, ukuran, perataan":"Kertas, margin, huruf, dan spasi"],ai:a?["Review Reviewer","Simulasi 1–3 reviewer dan editor jurnal"]:["Tinjauan Claude","Substansi, konsistensi, dan typo"],revisi:["Revisi Naskah","Perbaikan per bagian berdasarkan semua temuan"],copyedit:["Copyediting","Kemas ulang artikel sesuai template jurnal"],template:["Kesesuaian Template","Dibandingkan dengan template resmi Nusantara of Research"],banding:["Bandingkan Revisi","Perbedaan redaksi dan aktivitas revisi: naskah awal, saran, dan naskah revisi"],grammar:["Cek Grammar","Tata bahasa Indonesia dan Inggris"],similarity:["Cek Similarity","Kemiripan dengan literatur terindeks (indikatif)"],aicheck:["Cek Penggunaan AI","Indikasi teks buatan AI (indikatif)"],admin:["LOA & Invoice","Surat penerimaan dan tagihan dari data artikel"],ojs:["Siap Publish (OJS)","Metadata artikel siap salin-tempel ke OJS"],chat:["Tanya Pembimbing","Diskusikan naskah Anda dengan Claude"],unggah:["Unggah Naskah","Unggah .docx, .pdf, .txt atau tempel teks"]})[v];
 }
 const CAT = {struktur:"Struktur",isi:"Isi per Bab",abstrak:"Abstrak",bahasa:"Ejaan & Diksi",sitasi:"Sitasi & Pustaka",visual:"Tabel & Gambar",format:"Format"};
 const catLabel = c => isArt() ? ({struktur:"Struktur",isi:"Isi per Bagian",abstrak:"Judul & Abstrak"}[c]||CAT[c]) : CAT[c];
@@ -2404,7 +2405,7 @@ const PAKET = {
   fastrack:{label:"Fastrack", kode:true, items:[["Review Fastrack",450000],["Editorial Fastrack",300000],["Publikasi",150000]]}
 };
 function admState(){
-  if (!S.adm) S.adm = {nomor:"", noart:"", vol:"", no:"", tahun:String(new Date().getFullYear()), reg:"", tgl:isoToday(), doi:"", paket:"reguler", tglInv:isoToday(), judul:"", penulis:"", email:"", filled:false};
+  if (!S.adm) S.adm = {nomor:"", noart:"", vol:"", no:"", tahun:String(new Date().getFullYear()), reg:"", tgl:isoToday(), doi:"", paket:"reguler", invJenis:"deposit", paid:false, tglBayar:isoToday(), tglInv:isoToday(), judul:"", penulis:"", email:"", filled:false};
   const A=S.adm;
   if (!A.filled && S.doc){ admFill(); }
   return A;
@@ -2501,9 +2502,9 @@ async function buildLOA(){
     const pdoi = findPara(dom, t=>/^https?:\/\/doi\.org\//.test(t.trim())); if (pdoi){ if (doi) await putBarcode(dom, zip, pdoi, doi); else setParaFrom(pdoi, 0, ""); }
   });
 }
-async function buildInvoice(paket){
+async function buildInvoice(paket, jenis, paid){
   const A=admState(); paket=paket||A.paket; const P=PAKET[paket]; const total=P.items.reduce((a,x)=>a+x[1],0);
-  return fillTemplate("tplINV", dom=>{
+  return fillTemplate("tplINV", async (dom, zip)=>{
     for (const t of dom.getElementsByTagName("w:t")) if (t.textContent===". Author"){ if (A.penulis) t.textContent=". "+A.penulis; break; }
     const pj = findPara(dom, t=>/Diberitahukan/.test(t)); if (pj){ const ts=tNodes(pj); const k=ts.findIndex(t=>t.textContent==="Judul"); if (k>=0){ ts[k].textContent=A.judul||"Judul Artikel"; if (ts[k+1] && /Artikel/.test(ts[k+1].textContent)) ts[k+1].textContent=""; } }
     const ph = findPara(dom, t=>/^Uraian\s*Layanan$/.test(t.trim())); const tbl = ph && closest(ph,"w:tbl");
@@ -2516,6 +2517,8 @@ async function buildInvoice(paket){
       const tb = rows.find(r=>/^Terbilang/.test(pText(r).trim())); if (tb){ const c=cellsOf(tb); setCell(c[c.length-1], `“${kapital(terbilang(total))} Rupiah”`, cellsOf(tb)[0].getElementsByTagName("w:r")[0]||proto); }
     }
     const pd = findPara(dom, t=>/^Kediri,/.test(t.trim())); if (pd) setParaFrom(pd, 0, "Kediri, "+tglIndo(A.tglInv));
+    if ((jenis||A.invJenis)==="akhir") invoiceAkhirText(dom, A);
+    if (paid ?? A.paid) await addPaidStamp(dom, zip, A);
   });
 }
 async function admDownload(kind, paket){
@@ -2523,9 +2526,9 @@ async function admDownload(kind, paket){
   const miss=admMissing(A, kind); if (miss.length){ S.admWarn=kind; render(); return toast("Lengkapi dulu: "+miss.join(", ")+"."); }
   S.admWarn="";
   try{
-    const blob = kind==="loa" ? await buildLOA() : await buildInvoice(paket);
+    const blob = kind==="loa" ? await buildLOA() : await buildInvoice(paket, A.invJenis, A.paid);
     const nm = (A.reg||baseName()).toString().replace(/[^\w\-]+/g,"_");
-    await saveFile(kind==="loa" ? `LOA_${nm}.docx` : `Invoice_${PAKET[paket].label}_${nm}.docx`, blob, kind==="loa" ? "LOA disimpan." : "Invoice disimpan.");
+    await saveFile(kind==="loa" ? `LOA_${nm}.docx` : `${A.invJenis==="akhir"?"Invoice":"Invoice_Deposit"}_${PAKET[paket].label}_${nm}${A.paid?"_PAID":""}.docx`, blob, kind==="loa" ? "LOA disimpan." : "Invoice disimpan.");
   }catch(e){ console.error(e); toast("Dokumen gagal dibuat: "+(e.message||e)); }
 }
 
@@ -2542,16 +2545,19 @@ function vAdmin(){
         <dl class="kv" style="margin-top:12px"><dt>No. Artikel (kolom samping)</dt><dd>#${esc(admNoArtikel(A)||"—")}</dd><dt>Diterima pada</dt><dd>Volume ${esc(A.vol||"…")} Nomor ${esc(A.no||"…")} Tahun ${esc(A.tahun||"…")}</dd><dt>Tanda tangan</dt><dd>Kediri, ${esc(tglIndo(A.tgl))}</dd><dt>Barcode DOI</dt><dd style="word-break:break-all">${esc(doi||"—")}</dd></dl>
         <p class="small muted" style="margin:10px 0">Barcode DOI dibuat sebagai gambar (Code 128) sehingga tampil dan bisa dipindai di komputer mana pun tanpa font tambahan.</p>${S.admWarn==="loa"&&admMissing(A,"loa").length?`<p class="small" style="margin:0 0 10px;color:var(--bad,#c0392b)">Belum diisi: ${esc(admMissing(A,"loa").join(", "))}.</p>`:""}
         <button class="btn primary" data-act="admloa">Unduh LOA (.docx)</button></div>
-      <div class="card c6"><h3>Invoice deposit</h3>
+      <div class="card c6"><h3>${A.invJenis==="akhir"?"Invoice":"Invoice deposit"}${A.paid?'<span class="r" style="color:#c62828;font-weight:900;letter-spacing:.12em;border:2px solid #c62828;border-radius:6px;padding:0 6px;transform:rotate(-6deg)">PAID</span>':""}</h3>
+        <div class="toolbar" style="margin-bottom:8px"><span class="small muted">Jenis tagihan:</span><div class="seg" role="group">${Object.entries(INV_JENIS).map(([k,v])=>`<button aria-pressed="${A.invJenis===k}" data-invjenis="${k}">${v}</button>`).join("")}</div></div>
+        <p class="small muted" style="margin:0 0 10px">${A.invJenis==="akhir"?"Dikirim di akhir, setelah naskah diputuskan layak publish: “…telah dilakukan review… dan diputuskan layak publish. Proses selanjutnya adalah proses publikasi… pembayaran biaya editorial dan publikasi…”":"Dikirim di awal, setelah review awal: “…telah dilakukan review awal… memiliki potensi layak publish… pembayaran deposit untuk mengoptimalkan proses publikasi…”"}</p>
+        <label class="toggle" style="margin-bottom:10px;padding:7px 10px"><input type="checkbox" id="invPaid" ${A.paid?"checked":""}><span class="small"><b>Sudah dibayar</b> — beri cap <b style="color:#c62828">PAID / LUNAS</b> pada invoice</span></label>
         <div class="toolbar" style="margin-bottom:10px"><span class="small muted">Pratinjau paket:</span><div class="seg" role="group">${Object.entries(PAKET).map(([k,v])=>`<button aria-pressed="${A.paket===k}" data-paket="${k}">${v.label}</button>`).join("")}</div></div>
-        <div class="grid" style="gap:10px;margin-bottom:10px">${inp("tglInv","Tanggal invoice","","date","c6")}</div>
+        <div class="grid" style="gap:10px;margin-bottom:10px">${inp("tglInv","Tanggal invoice","","date","c6")}${A.paid?inp("tglBayar","Tanggal pembayaran (cap PAID)","","date","c6"):""}</div>
         <div class="tbl-wrap"><table><thead><tr><th>No</th><th>Uraian layanan</th>${P.kode?"<th>Kode</th>":""}<th>Jumlah (Rp)</th></tr></thead><tbody>
           ${P.items.map((it,i)=>`<tr><td>${i+1}</td><td style="text-align:left;font-weight:500">${esc(it[0])}</td>${P.kode?"<td></td>":""}<td style="text-align:right">${rupiah(it[1])}</td></tr>`).join("")}
           <tr><td></td><td style="text-align:right">Total</td>${P.kode?"<td></td>":""}<td style="text-align:right;font-weight:800">${rupiah(total)}</td></tr>
         </tbody></table></div>
         <p class="small" style="margin:8px 0 12px"><b>Terbilang:</b> “${esc(kapital(terbilang(total)))} Rupiah”</p>
         <p class="small muted" style="margin:0 0 12px">Judul pada invoice: “${esc(A.judul||"—")}”</p>
-        <div class="small muted" style="margin:0 0 8px">Cetak invoice (.docx):</div><div style="display:flex;gap:8px;flex-wrap:wrap">${Object.entries(PAKET).map(([k,v])=>`<button class="btn ${A.paket===k?"primary":""}" data-act="adminv" data-pk="${k}">Paket ${v.label}</button>`).join("")}</div></div>
+        <div class="small muted" style="margin:0 0 8px">Cetak ${A.invJenis==="akhir"?"invoice":"invoice deposit"}${A.paid?" dengan cap PAID":""} (.docx):</div><div style="display:flex;gap:8px;flex-wrap:wrap">${Object.entries(PAKET).map(([k,v])=>`<button class="btn ${A.paket===k?"primary":""}" data-act="adminv" data-pk="${k}">Paket ${v.label}</button>`).join("")}</div></div>
     </section>`;
 }
 
@@ -3623,7 +3629,7 @@ async function renderPdf(m){
 
 /* ── model laporan ── */
 function sectionModel(cat){
-  const special = {sitasi:citeReportModel, template:templateReportModel, banding:bandingModel, grammar:grammarModel, similarity:similarityModel, aicheck:aicheckModel, instan:instantModel, review:reviewModel, overall:overallModel}[cat];
+  const special = {ojs:ojsModel, sitasi:citeReportModel, template:templateReportModel, banding:bandingModel, grammar:grammarModel, similarity:similarityModel, aicheck:aicheckModel, instan:instantModel, review:reviewModel, overall:overallModel}[cat];
   if (special) return special();
   const L=S.local; const fs=L.all.filter(f=>f.cat===cat && incl(f)); const art=L.art;
   const label = {struktur:art?"Struktur Artikel":"Struktur Naskah", isi:art?"Isi per Bagian":"Isi per Bab", abstrak:art?"Judul dan Abstrak":"Abstrak", bahasa:"Ejaan dan Diksi", visual:"Tabel dan Gambar", format:"Format Dokumen"}[cat] || CAT[cat];
@@ -3851,6 +3857,114 @@ function vAIScope(){
   return `<div style="margin-top:12px"><div class="small muted" style="margin-bottom:6px">Cakupan tinjauan: <b>${allSel?"keseluruhan naskah":`${sel.length} dari ${all.length} bab`}</b> · <button class="linkish" data-aiunitall="1">semua</button> · <button class="linkish" data-aiunitall="0">kosongkan</button></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">${all.map(u=>`<label class="toggle" style="padding:6px 10px"><input type="checkbox" data-aiunit="${esc(u)}" ${sel.includes(u)?"checked":""}><span class="small">${esc(u)}</span></label>`).join("")}</div>
     <label class="toggle" style="margin-top:8px;padding:7px 10px"><input type="checkbox" id="aiPerBab" ${S.aiPerBab?"checked":""} ${sel.length>1?"":"disabled"}><span class="small"><b>Tinjau tiap bab secara terpisah</b> (lebih detail; ${sel.length} permintaan ke Claude)</span></label></div>`;
+}
+
+/* ═════════════ INVOICE: DEPOSIT (AWAL) / INVOICE (AKHIR) + CAP PAID ═════════════ */
+const INV_JENIS = {deposit:"Deposit (awal)", akhir:"Invoice (akhir)"};
+async function paidStampPNG(dateTxt){
+  const W=560, H=300, cv=document.createElement("canvas"); cv.width=W; cv.height=H; const g=cv.getContext("2d");
+  g.translate(W/2, H/2); g.rotate(-0.21); const red="rgba(198,40,40,0.9)";
+  const rr=(x,y,w,h,r)=>{ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); };
+  g.strokeStyle=red; g.lineWidth=10; rr(-230,-105,460,210,26); g.stroke(); g.lineWidth=3; rr(-212,-87,424,174,16); g.stroke();
+  g.fillStyle=red; g.textAlign="center"; g.textBaseline="middle";
+  g.font="900 104px Arial Black, Arial, sans-serif"; g.fillText("PAID", 0, -16);
+  g.font="700 26px Arial, sans-serif"; g.fillText(`LUNAS · ${dateTxt}`, 0, 46);
+  g.font="700 14px Arial, sans-serif"; g.fillText("NUSANTARA OF RESEARCH", 0, 72);
+  const url=cv.toDataURL("image/png"); const bin=atob(url.split(",")[1]); const u=new Uint8Array(bin.length); for (let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return {bytes:u, w:W, h:H};
+}
+async function addPaidStamp(dom, zip, A){
+  const st = await paidStampPNG(tglIndo(A.tglBayar||A.tglInv)||tglIndo(isoToday()));
+  zip.file("word/media/paid_stamp.png", st.bytes);
+  const relP="word/_rels/document.xml.rels"; let rels=await zip.file(relP).async("string"); if (!/Id="rIdPaid"/.test(rels)) rels=rels.replace("</Relationships>",'<Relationship Id="rIdPaid" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/paid_stamp.png"/></Relationships>'); zip.file(relP, rels);
+  const ctP="[Content_Types].xml"; let ct=await zip.file(ctP).async("string"); if (!/Extension="png"/i.test(ct)) ct=ct.replace(/(<Types[^>]*>)/,'$1<Default Extension="png" ContentType="image/png"/>'); zip.file(ctP, ct);
+  const cx=Math.round(6.2*360000), cy=Math.round(cx*st.h/st.w);
+  const xml = `<w:p xmlns:w="${W_NS}"><w:r><w:drawing><wp:anchor xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="251700000" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:posOffset>${Math.round(0.6*360000)}</wp:posOffset></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>${Math.round(-0.4*360000)}</wp:posOffset></wp:positionV><wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:wrapNone/><wp:docPr id="9101" name="Cap PAID"/><wp:cNvGraphicFramePr/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="9101" name="paid_stamp.png"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rIdPaid"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r></w:p>`;
+  const frag = new DOMParser().parseFromString(xml,"application/xml").documentElement.firstChild;
+  const pd = findPara(dom, t=>/^Kediri,/.test(t.trim())) || findPara(dom, t=>/^ke\s+Rekening/i.test(t.trim()));
+  if (pd) pd.appendChild(dom.importNode(frag, true));
+}
+function invoiceAkhirText(dom, A){
+  const h = findPara(dom, t=>/^INVOICE/.test(t.trim())); if (h){ tNodes(h).forEach(t=>{ if (/DEPOSIT/.test(t.textContent)) t.textContent=t.textContent.replace(/\s*DEPOSIT/,""); }); }
+  const pj = findPara(dom, t=>/Diberitahukan/.test(t)); if (!pj) return;
+  const runs = [...pj.getElementsByTagName("w:r")]; const isB = r => !!r.getElementsByTagName("w:b")[0];
+  const bi = runs.findIndex(isB); let be = bi; while (be+1<runs.length && isB(runs[be+1])) be++;
+  const setRun = (r, txt) => { const ts=r.getElementsByTagName("w:t"); if (!ts[0]) return; ts[0].textContent=txt; ts[0].setAttribute("xml:space","preserve"); for (let k=1;k<ts.length;k++) ts[k].textContent=""; };
+  runs.slice(0, bi).forEach((r,k)=>setRun(r, k===0 ? "Diberitahukan bahwa telah dilakukan review pada artikel dengan judul " : ""));
+  runs.slice(be+1).forEach((r,k)=>setRun(r, k===0 ? "dan diputuskan layak publish. Proses selanjutnya adalah proses publikasi. Sehubungan dengan hal tersebut dimohon untuk melakukan pembayaran biaya editorial dan publikasi, yaitu sebesar:" : ""));
+}
+
+/* ═════════════ SIAP PUBLISH: METADATA OJS SIAP SALIN ═════════════ */
+const ojsState = () => S.ojs || (S.ojs = {src:"", ed:{}, busy:false, err:""});
+const OJS_LICENSE = "https://creativecommons.org/licenses/by-sa/4.0/";
+function ojsSource(){ const O=ojsState(); if (O.src) return O.src; return S.inst&&S.inst.done ? "instan" : S.rev&&S.rev.done ? "revisi" : "upload"; }
+function splitPrefix(t){ const m=/^(The|A|An)\s+(.+)$/.exec(String(t||"").trim()); return m ? [m[1], m[2]] : ["", String(t||"").trim()]; }
+function splitName(n){ const p=String(n||"").replace(/[*\d¹²³⁴⁵⁶⁷⁸⁹⁰]+/g,"").trim().split(/\s+/).filter(Boolean); if (p.length<=1) return [p[0]||"", ""]; const fam=p.pop(); return [p.join(" "), fam]; }
+function ojsData(){
+  const O=ojsState(); const src=ojsSource();
+  let E=null; try{ E = (src==="upload" && S.ce && S.ce.E && S.ce.src==="upload") ? S.ce.E : extractArticle(src); }catch(e){ console.warn(e); }
+  E = E || {judul:"", penulis:[], institusi:[], email:[], abstract_en:"", keywords_en:[], abstrak_id:"", kata_kunci_id:[], rujukan:[]};
+  const A=admState(); const judul=String(E.judul||"").trim(); const lang = detectLang(judul+" "+(E.abstrak_id||"").slice(0,200), "auto");
+  const titleId = lang==="id" ? smartTitle(judul) : (O.ed.title_id||""); const titleEn = lang==="en" ? smartTitle(judul) : (O.ed.title_en||"");
+  const [pfxEn, tEn] = splitPrefix(titleEn);
+  const authors = (E.penulis||[]).map((n,i)=>{ const [g,f]=splitName(n); return {given:g, family:f, email:(E.email||[])[i]||"", affiliation:(E.institusi||[])[i]||(E.institusi||[])[0]||"", country:"Indonesia", primary: i===0 || /\*/.test(n)}; });
+  const doi = admDOI(A); const vol=A.vol||"", no=A.no||"", year=A.tahun||String(new Date().getFullYear());
+  const F = [];
+  const add = (grp, key, label, val, opt={}) => F.push({grp, key, label, val:String(val??""), ...opt});
+  add("Judul & Abstrak (Title & Abstract)","title_id","Title — Bahasa Indonesia", titleId, {hint: lang==="en"?"Judul artikel berbahasa Inggris; isi atau terjemahkan judul Indonesia bila jurnal meminta dua bahasa.":""});
+  add("Judul & Abstrak (Title & Abstract)","abstract_id","Abstract — Bahasa Indonesia", E.abstrak_id, {big:true});
+  add("Judul & Abstrak (Title & Abstract)","prefix_en","Prefix — English", pfxEn, {hint:"Kata sandang awal judul (The, A, An); kosongkan bila tidak ada."});
+  add("Judul & Abstrak (Title & Abstract)","title_en","Title — English", tEn, {hint: !tEn?"Belum ada judul berbahasa Inggris. Tekan Terjemahkan judul.":""});
+  add("Judul & Abstrak (Title & Abstract)","abstract_en","Abstract — English", E.abstract_en, {big:true});
+  authors.forEach((a,i)=>{ const g=`Kontributor (Contributors) — Penulis ${i+1}${a.primary?" · Primary contact":""}`;
+    add(g,`a${i}_given`,"Given Name",a.given); add(g,`a${i}_family`,"Family Name",a.family,{hint:a.family?"":"Nama satu kata: isi Given Name saja."}); add(g,`a${i}_email`,"Email",a.email,{hint:a.email?"":"E-mail penulis ini tidak ditemukan di naskah."}); add(g,`a${i}_country`,"Country",a.country); add(g,`a${i}_aff`,"Affiliation",a.affiliation); add(g,`a${i}_role`,"Contributor's role","Author"); });
+  add("Metadata","kw_id","Keywords — Bahasa Indonesia", (E.kata_kunci_id||[]).join(", "), {hint:"Tempel di kolom keyword; setiap kata kunci dipisah koma."});
+  add("Metadata","kw_en","Keywords — English", (E.keywords_en||[]).join(", "));
+  add("Metadata","lang","Language", lang==="en"?"en":"id");
+  add("Referensi (References)","refs","References", (E.rujukan||[]).map(r=>String(r).replace(/\*/g,"")).join("\n"), {big:true, hint:"Satu referensi per baris, siap ditempel ke kolom References."});
+  add("Identifiers","doi","DOI", doi, {hint: doi?"":"Isi volume, nomor, dan nomor register di menu LOA & Invoice agar DOI terbentuk."});
+  add("Issue","issue","Issue", vol&&no?`Vol. ${vol} No. ${no} (${year})`:"", {hint: vol&&no?"":"Isi volume dan nomor di menu LOA & Invoice."});
+  add("Issue","section","Section","Articles");
+  add("Issue","pages","Pages", O.ed.pages||"", {hint:"Isi rentang halaman, mis. 68-77."});
+  add("Issue","urlpath","URL Path", A.reg||"");
+  add("Izin & Hak Cipta (Permissions & Disclosure)","copyholder","Copyright Holder", authors.map(a=>[a.given,a.family].filter(Boolean).join(" ")).join(", ")||"Author(s)");
+  add("Izin & Hak Cipta (Permissions & Disclosure)","copyyear","Copyright Year", year);
+  add("Izin & Hak Cipta (Permissions & Disclosure)","license","License URL", O.ed.license||OJS_LICENSE, {hint:"Sesuaikan dengan lisensi yang dipakai jurnal."});
+  add("Galley","galley","Galley label", "PDF"); add("Galley","galleyfile","Nama berkas galley", `NOR_v${vol||"X"}n${no||"X"}_${A.reg||"artikel"}.pdf`);
+  F.forEach(f=>{ if (O.ed[f.key]!=null && !["title_id","title_en","pages","license"].includes(f.key)) f.val=O.ed[f.key]; });
+  return {F, E, lang, src};
+}
+async function copyText(t, label){
+  try{ await navigator.clipboard.writeText(t); }
+  catch(e){ const ta=document.createElement("textarea"); ta.value=t; ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta); ta.select(); try{ document.execCommand("copy"); }catch(_){} ta.remove(); }
+  toast(`${label||"Teks"} disalin.`);
+}
+async function ojsTranslate(){
+  const O=ojsState(); if (!S.sample){ toast("Terjemahan memakai Claude; buka di claude.ai."); return; }
+  const {E, lang} = ojsData(); if (!E.judul) return toast("Judul artikel tidak ditemukan.");
+  O.busy=true; render();
+  try{ const r = await S.sample.json(`Terjemahkan judul artikel ilmiah berikut ke ${lang==="en"?"bahasa Indonesia baku":"bahasa Inggris akademik"} dengan Title Case yang benar, tanpa menambah atau mengurangi makna. Balas HANYA JSON {"judul":"..."}\n\n${E.judul}`, {modelTier:"quick"});
+    if (r && r.judul) O.ed[lang==="en"?"title_id":"title_en"] = String(r.judul).trim(); }
+  catch(e){ toast("Terjemahan gagal; coba lagi."); }
+  O.busy=false; render();
+}
+function vOJS(){
+  const O=ojsState(); const {F, src, lang} = ojsData();
+  const srcs=[["upload","Naskah unggahan"],["revisi","Hasil Revisi Naskah",!(S.rev&&S.rev.done)],["instan","Hasil Revisi Instan",!(S.inst&&S.inst.done)]];
+  const groups=[...new Set(F.map(f=>f.grp))];
+  const field = f => `<div style="margin:0 0 12px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><label class="small" for="ojs_${f.key}" style="font-weight:600;flex:1">${esc(f.label)}</label><button class="btn sm" data-ojscopy="${f.key}" data-ojslabel="${esc(f.label)}">Salin</button></div>
+    <textarea id="ojs_${f.key}" data-ojsed="${f.key}" rows="${f.big?6:Math.min(3,Math.max(1,Math.ceil(f.val.length/90)))}" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:13px;font-family:inherit;resize:vertical">${esc(f.val)}</textarea>${f.hint?`<div class="small muted" style="margin-top:3px">${esc(f.hint)}</div>`:""}</div>`;
+  return `<div class="card" style="margin-bottom:16px"><h3>Siap publish di OJS<span class="r">Nusantara of Research · alur Workflow → Publication</span></h3>
+    <p class="small" style="margin:0 0 10px">Semua isian di bawah diekstrak dari artikel dan disusun mengikuti urutan tab publikasi OJS (Title &amp; Abstract, Contributors, Metadata, References, Identifiers, Issue, Permissions &amp; Disclosure, Galleys). Tekan <b>Salin</b> pada setiap kolom lalu tempel di kolom OJS yang sama namanya. Isian bisa diubah dulu bila perlu.</p>
+    <div class="toolbar" style="margin:0"><span class="small muted">Sumber artikel:</span><div class="seg" role="group">${srcs.map(([k,l,dis])=>`<button aria-pressed="${src===k}" data-ojssrc="${k}" ${dis?"disabled":""}>${l}</button>`).join("")}</div>
+      <button class="btn sm" data-act="ojstrans" ${O.busy||!S.sample?"disabled":""}>${O.busy?"Menerjemahkan…":lang==="en"?"Terjemahkan judul ke Indonesia":"Terjemahkan judul ke Inggris"}</button>
+      <button class="btn sm" data-act="ojsall">Salin semua</button><button class="btn sm" data-act="ojsdocx">Unduh lembar metadata (.docx)</button></div></div>
+    ${groups.map(g=>`<div class="card" style="margin-bottom:16px"><h3>${esc(g)}</h3>${F.filter(f=>f.grp===g).map(field).join("")}</div>`).join("")}`;
+}
+function ojsAllText(){ const {F}=ojsData(); let g="", s=""; F.forEach(f=>{ if (f.grp!==g){ s+=`\n=== ${f.grp} ===\n`; g=f.grp; } const v=(document.getElementById("ojs_"+f.key)||{}).value ?? f.val; s+=`${f.label}:\n${v}\n\n`; }); return s.trim(); }
+function ojsModel(){
+  const {F}=ojsData(); const groups=[...new Set(F.map(f=>f.grp))]; const blocks=[];
+  groups.forEach(g=>{ blocks.push({h:g, lvl:2}); blocks.push({table:{head:["Kolom OJS","Isian"], w:[26,74], rows:F.filter(f=>f.grp===g).map(f=>[cell(f.label,{b:true}), ((document.getElementById("ojs_"+f.key)||{}).value ?? f.val) || "—"])}}); });
+  return {count:F.length, title:"Lembar Metadata Publikasi OJS", sub:`${NOR_NAME} · ojs.unpkediri.ac.id/index.php/efektor`, info:baseInfo(), blocks, file:"Metadata_OJS"};
 }
 
 /* ═════════════ RUN ═════════════ */
@@ -4206,7 +4320,7 @@ function render(){
   $("#btnTpl").classList.toggle("primary", S.view==="template"); $("#btnTpl").disabled = !S.local;
   $("#btnReset").disabled = !S.doc && !S.chat.length;
   $("#selJenis").disabled = false;
-  const views = {overview:()=>dlBar("overall")+vOverview(),perbab:vPerBab,naskah:vNaskah,struktur:vStruktur,isi:()=>findingsView("isi"),abstrak:vAbstrak,bahasa:vBahasa,sitasi:vSitasi,visual:()=>findingsView("visual"),format:vFormat,ai:()=>vAI()+(S.ai&&!isArt()&&!S.aiBusy?vReviewDl():""),revisi:vRevisi,copyedit:vCopyedit,template:vTemplate,banding:vBanding,grammar:vGrammar,similarity:vSimilarity,aicheck:vAICheck,admin:vAdmin,chat:vChat,unggah:vUnggah};
+  const views = {overview:()=>dlBar("overall")+vOverview(),perbab:vPerBab,naskah:vNaskah,struktur:vStruktur,isi:()=>findingsView("isi"),abstrak:vAbstrak,bahasa:vBahasa,sitasi:vSitasi,visual:()=>findingsView("visual"),format:vFormat,ai:()=>vAI()+(S.ai&&!isArt()&&!S.aiBusy?vReviewDl():""),revisi:vRevisi,copyedit:vCopyedit,template:vTemplate,ojs:vOJS,banding:vBanding,grammar:vGrammar,similarity:vSimilarity,aicheck:vAICheck,admin:vAdmin,chat:vChat,unggah:vUnggah};
   $("#view").innerHTML = staging ? vStage() : (S.view==="chat" && !S.local ? vStage() : views[S.view]());
   $("#foot").textContent = `${isArt()?"Template artikel jurnal Nusantara of Research":"Pedoman KTI 2025"} · Hasil bersifat pendamping; keputusan akhir tetap pada dosen pembimbing dan editor.`;
   const msgs=$("#msgs"); if(msgs) msgs.scrollTop=msgs.scrollHeight;
@@ -4477,6 +4591,9 @@ document.addEventListener("click", e=>{
   if (b.dataset.simn){ simState().n=+b.dataset.simn; return render(); }
   if (b.dataset.simrefdel!=null){ simState().refs.splice(+b.dataset.simrefdel,1); return render(); }
   if (b.dataset.aiunitall!=null){ S.aiUnits = b.dataset.aiunitall==="1" ? null : []; return render(); }
+  if (b.dataset.invjenis){ admState().invJenis=b.dataset.invjenis; return render(); }
+  if (b.dataset.ojssrc){ ojsState().src=b.dataset.ojssrc; return render(); }
+  if (b.dataset.ojscopy){ const el=document.getElementById("ojs_"+b.dataset.ojscopy); return copyText(el?el.value:"", b.dataset.ojslabel); }
   if (b.dataset.revtone){ S.revTone=b.dataset.revtone; return render(); }
   if (b.dataset.revsecall!=null){ S.revSecSel = b.dataset.revsecall==="1" ? [...REV_SECTIONS] : []; return render(); }
   if (b.dataset.inclall){ const [sc,v]=b.dataset.inclall.split("|"); scopeItems(sc).forEach(f=>setIncl(fid(f), v==="1")); return render(); }
@@ -4495,6 +4612,9 @@ document.addEventListener("click", e=>{
   if (a==="admrefill"){ admState(); S.adm.filled=false; admFill(); toast("Data artikel diambil ulang."); return render(); }
   if (a==="citedl") return citeDownload();
   if (a==="tplreset") return resetTemplate();
+  if (a==="ojstrans") return ojsTranslate();
+  if (a==="ojsall") return copyText(ojsAllText(), "Semua metadata");
+  if (a==="ojsdocx") return sectionDownload("ojs","docx");
   if (a==="cmprun") return runCompare();
   if (a==="instrun") return runInstant();
   if (a==="inststop") return S.inst && S.inst.ctl && S.inst.ctl.abort();
@@ -4537,7 +4657,7 @@ document.addEventListener("click", e=>{ if (e.target && (e.target.id==="fileIn2"
 document.addEventListener("submit", e=>{ if(e.target.id==="chatForm"){ e.preventDefault(); const t=$("#chatIn"); const q=t.value; t.value=""; sendChat(q); } });
 document.addEventListener("keydown", e=>{ if(e.key==="Escape" && S.menuOpen) closeMenu(); });
 document.addEventListener("keydown", e=>{ if(e.target.id==="chatIn" && e.key==="Enter" && !e.shiftKey){ e.preventDefault(); $("#chatForm").requestSubmit(); } });
-document.addEventListener("change", e=>{ if(e.target.id==="fileIn2"||e.target.id==="fileIn"){ handleFile(e.target.files[0]); e.target.value=""; } if(e.target.id==="withAI") S.withAI=e.target.checked; if(e.target.id==="useScite") S.useScite=e.target.checked; if(e.target.dataset && e.target.dataset.cemeta){ const C=ceState(); C.meta[e.target.dataset.cemeta]=e.target.value.trim(); if (C.E && C.E.autoCite) C.E.cara_mengutip=autoCite(C.E); render(); } if(e.target.dataset && e.target.dataset.revsec!=null){ const cur=revSecs().slice(); const s=e.target.dataset.revsec; S.revSecSel = e.target.checked ? REV_SECTIONS.filter(x=>cur.includes(x)||x===s) : cur.filter(x=>x!==s); if (!S.revSecSel.length) S.revSecSel=[]; render(); } if(e.target.dataset && e.target.dataset.withapx){ S.withAppendix=e.target.checked; render(); } if(e.target.dataset && e.target.dataset.aiunit!=null){ const cur=aiSel(); const u=e.target.dataset.aiunit; const all=unitsForRevision(); const next = e.target.checked ? all.filter(x=>cur.includes(x)||x===u) : cur.filter(x=>x!==u); S.aiUnits = next.length===all.length ? null : next; render(); } if(e.target.id==="aiPerBab"){ S.aiPerBab=e.target.checked; } if(e.target.id==="revNote"){ S.revNote=e.target.value; } if(e.target.dataset && e.target.dataset.revnoter){ (S.revNoteR=S.revNoteR||{})[e.target.dataset.revnoter]=e.target.value; } if(e.target.id==="revNoDup"){ S.revNoDup=e.target.checked; } if(e.target.dataset && e.target.dataset.incl!=null){ setIncl(e.target.dataset.incl, e.target.checked); render(); } if(e.target.dataset && e.target.dataset.cmpslot){ const k=e.target.dataset.cmpslot, f=e.target.files[0]; e.target.value=""; if (f){ const C=cmpState(); C.busy="Membaca "+(f.name||"berkas")+"…"; C.err=""; render(); readAnyDoc(f).then(d=>{ C.docs[k]=d; C.res=null; C.act=null; }).catch(err=>{ C.err=(k==="awal"?"Naskah awal":k==="akhir"?"Naskah revisi":"Dokumen review")+": "+(err.message||err); }).finally(()=>{ C.busy=""; render(); }); } } if(e.target.id==="simRef"){ const f=e.target.files[0]; e.target.value=""; if (f) readAnyDoc(f).then(d=>{ simState().refs.push({name:d.name, text:d.paras.map(p=>p.text).join(" ")}); render(); }).catch(err=>toast("Pembanding tidak terbaca: "+(err.message||err))); } if(e.target.id==="tplIn"){ useTemplateFile(e.target.files[0]); e.target.value=""; } if(e.target.dataset && e.target.dataset.revname!=null){ revNames()[e.target.dataset.revname]=e.target.value.trim(); saveRevNames(); render(); } if(e.target.dataset && e.target.dataset.cmtopt){ cmtOpt()[e.target.dataset.cmtopt]=e.target.checked; render(); } if(e.target.dataset && e.target.dataset.srcdb){ srcOpt()[e.target.dataset.srcdb]=e.target.checked; render(); } if(e.target.dataset && e.target.dataset.adm){ admState()[e.target.dataset.adm]=e.target.value.trim(); render(); } if(e.target.id==="jrUrl"){ S.jr.url=e.target.value.trim(); saveJR(); render(); } if(e.target.id==="jrInfo"){ S.jr.info=e.target.value; saveJR(); } if(e.target.dataset && e.target.dataset.done!=null){ S.revDone[e.target.dataset.done]=e.target.checked; saveDone(); render(); } });
+document.addEventListener("change", e=>{ if(e.target.id==="fileIn2"||e.target.id==="fileIn"){ handleFile(e.target.files[0]); e.target.value=""; } if(e.target.id==="withAI") S.withAI=e.target.checked; if(e.target.id==="useScite") S.useScite=e.target.checked; if(e.target.dataset && e.target.dataset.cemeta){ const C=ceState(); C.meta[e.target.dataset.cemeta]=e.target.value.trim(); if (C.E && C.E.autoCite) C.E.cara_mengutip=autoCite(C.E); render(); } if(e.target.dataset && e.target.dataset.revsec!=null){ const cur=revSecs().slice(); const s=e.target.dataset.revsec; S.revSecSel = e.target.checked ? REV_SECTIONS.filter(x=>cur.includes(x)||x===s) : cur.filter(x=>x!==s); if (!S.revSecSel.length) S.revSecSel=[]; render(); } if(e.target.dataset && e.target.dataset.withapx){ S.withAppendix=e.target.checked; render(); } if(e.target.dataset && e.target.dataset.aiunit!=null){ const cur=aiSel(); const u=e.target.dataset.aiunit; const all=unitsForRevision(); const next = e.target.checked ? all.filter(x=>cur.includes(x)||x===u) : cur.filter(x=>x!==u); S.aiUnits = next.length===all.length ? null : next; render(); } if(e.target.id==="aiPerBab"){ S.aiPerBab=e.target.checked; } if(e.target.id==="invPaid"){ admState().paid=e.target.checked; render(); } if(e.target.dataset && e.target.dataset.ojsed){ ojsState().ed[e.target.dataset.ojsed]=e.target.value; } if(e.target.id==="revNote"){ S.revNote=e.target.value; } if(e.target.dataset && e.target.dataset.revnoter){ (S.revNoteR=S.revNoteR||{})[e.target.dataset.revnoter]=e.target.value; } if(e.target.id==="revNoDup"){ S.revNoDup=e.target.checked; } if(e.target.dataset && e.target.dataset.incl!=null){ setIncl(e.target.dataset.incl, e.target.checked); render(); } if(e.target.dataset && e.target.dataset.cmpslot){ const k=e.target.dataset.cmpslot, f=e.target.files[0]; e.target.value=""; if (f){ const C=cmpState(); C.busy="Membaca "+(f.name||"berkas")+"…"; C.err=""; render(); readAnyDoc(f).then(d=>{ C.docs[k]=d; C.res=null; C.act=null; }).catch(err=>{ C.err=(k==="awal"?"Naskah awal":k==="akhir"?"Naskah revisi":"Dokumen review")+": "+(err.message||err); }).finally(()=>{ C.busy=""; render(); }); } } if(e.target.id==="simRef"){ const f=e.target.files[0]; e.target.value=""; if (f) readAnyDoc(f).then(d=>{ simState().refs.push({name:d.name, text:d.paras.map(p=>p.text).join(" ")}); render(); }).catch(err=>toast("Pembanding tidak terbaca: "+(err.message||err))); } if(e.target.id==="tplIn"){ useTemplateFile(e.target.files[0]); e.target.value=""; } if(e.target.dataset && e.target.dataset.revname!=null){ revNames()[e.target.dataset.revname]=e.target.value.trim(); saveRevNames(); render(); } if(e.target.dataset && e.target.dataset.cmtopt){ cmtOpt()[e.target.dataset.cmtopt]=e.target.checked; render(); } if(e.target.dataset && e.target.dataset.srcdb){ srcOpt()[e.target.dataset.srcdb]=e.target.checked; render(); } if(e.target.dataset && e.target.dataset.adm){ admState()[e.target.dataset.adm]=e.target.value.trim(); render(); } if(e.target.id==="jrUrl"){ S.jr.url=e.target.value.trim(); saveJR(); render(); } if(e.target.id==="jrInfo"){ S.jr.info=e.target.value; saveJR(); } if(e.target.dataset && e.target.dataset.done!=null){ S.revDone[e.target.dataset.done]=e.target.checked; saveDone(); render(); } });
 document.addEventListener("dragover", e=>{ const d=e.target.closest&&e.target.closest("#drop"); if(d){ e.preventDefault(); d.classList.add("over"); } });
 document.addEventListener("dragleave", e=>{ const d=e.target.closest&&e.target.closest("#drop"); if(d) d.classList.remove("over"); });
 document.addEventListener("drop", e=>{ const d=e.target.closest&&e.target.closest("#drop"); if(d){ e.preventDefault(); d.classList.remove("over"); handleFile(e.dataTransfer.files[0]); } });
