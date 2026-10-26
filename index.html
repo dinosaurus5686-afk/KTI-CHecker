@@ -3958,7 +3958,7 @@ function vOJS(){
     <div class="toolbar" style="margin:0"><span class="small muted">Sumber artikel:</span><div class="seg" role="group">${srcs.map(([k,l,dis])=>`<button aria-pressed="${src===k}" data-ojssrc="${k}" ${dis?"disabled":""}>${l}</button>`).join("")}</div>
       <button class="btn sm" data-act="ojstrans" ${O.busy||!S.sample?"disabled":""}>${O.busy?"Menerjemahkan…":lang==="en"?"Terjemahkan judul ke Indonesia":"Terjemahkan judul ke Inggris"}</button>
       <button class="btn sm" data-act="ojsall">Salin semua</button><button class="btn sm" data-act="ojsdocx">Unduh lembar metadata (.docx)</button></div></div>
-    ${vOJSFill()}${groups.map(g=>`<div class="card" style="margin-bottom:16px"><h3>${esc(g)}</h3>${F.filter(f=>f.grp===g).map(field).join("")}</div>`).join("")}`;
+    ${vOJSWizard()}<details style="margin-bottom:16px"><summary class="small" style="cursor:pointer;font-weight:600;margin-bottom:10px">Cara otomatis dengan bookmark (untuk komputer, lebih teknis)</summary>${vOJSFill()}</details><h3 style="margin:8px 0 12px;font-size:13px;letter-spacing:.06em;text-transform:uppercase">Semua isian (bisa diedit)</h3>${groups.map(g=>`<div class="card" style="margin-bottom:16px"><h3>${esc(g)}</h3>${F.filter(f=>f.grp===g).map(field).join("")}</div>`).join("")}`;
 }
 function ojsAllText(){ const {F}=ojsData(); let g="", s=""; F.forEach(f=>{ if (f.grp!==g){ s+=`\n=== ${f.grp} ===\n`; g=f.grp; } const v=(document.getElementById("ojs_"+f.key)||{}).value ?? f.val; s+=`${f.label}:\n${v}\n\n`; }); return s.trim(); }
 function ojsModel(){
@@ -4046,6 +4046,45 @@ function vOJSFill(){
       <a class="btn primary" href="${esc(ojsBookmarklet())}" data-bookmarklet="1" draggable="true" title="Seret ke bilah bookmark">⚡ Isi OJS – ${esc(d.sid||"naskah")}</a>
       <button class="btn sm" data-act="ojsbmcopy">Salin kode bookmark</button><button class="btn sm" data-act="ojsconsole">Salin skrip konsol</button></div>
     <p class="small muted" style="margin:10px 0 0">Yang diisi: Title, Prefix, dan Abstract (Indonesia & Inggris), Keywords, References, Pages, Copyright Holder/Year, dan License URL. Contributors opsional (penulis yang sudah ada tidak digandakan). Skrip berjalan di OJS memakai sesi login Anda dan tidak mengirim data ke tempat lain. Bila isian di bawah diubah, tombol ini otomatis memakai isian terbaru. Data disiapkan untuk naskah nomor register <b>${esc(d.sid||"(belum diisi di LOA & Invoice)")}</b>; bila dijalankan di naskah lain, akan muncul peringatan.</p></div>`;
+}
+
+/* ═════════════ PANDUAN TEMPEL OJS LANGKAH DEMI LANGKAH ═════════════ */
+const OJS_WHERE = {
+  title_id:["Title & Abstract","Indonesian","Title"], abstract_id:["Title & Abstract","Indonesian","Abstract"],
+  prefix_en:["Title & Abstract","English","Prefix"], title_en:["Title & Abstract","English","Title"], abstract_en:["Title & Abstract","English","Abstract"],
+  kw_id:["Metadata","Indonesian","Keywords"], kw_en:["Metadata","English","Keywords"],
+  refs:["References","","References"], pages:["Issue","","Pages"], urlpath:["Issue","","URL Path"],
+  copyholder:["Permissions & Disclosure","","Copyright Holder"], copyyear:["Permissions & Disclosure","","Copyright Year"], license:["Permissions & Disclosure","","License URL"]
+};
+function ojsSteps(){
+  const {F}=ojsData(); const val=k=>{ const el=document.getElementById("ojs_"+k); const f=F.find(x=>x.key===k); return String((el?el.value:(f?f.val:""))||"").trim(); };
+  const st=[];
+  Object.keys(OJS_WHERE).forEach(k=>{ const v=val(k); if (v) st.push({key:k, tab:OJS_WHERE[k][0], lang:OJS_WHERE[k][1], field:OJS_WHERE[k][2], val:v}); });
+  for (let i=0; F.some(f=>f.key===`a${i}_given`); i++){
+    [["given","Given Name"],["family","Family Name"],["email","Email"],["country","Country"],["aff","Affiliation"]].forEach(([s,l],j)=>{ const v=val(`a${i}_${s}`); if (v) st.push({key:`a${i}_${s}`, tab:"Contributors", lang:"", field:l, val:v, author:i+1, first:j===0}); });
+  }
+  return st;
+}
+function vOJSWizard(){
+  const W = S.ojsWiz || (S.ojsWiz={step:0, done:{}}); const st=ojsSteps(); if (!st.length) return "";
+  W.step=Math.max(0,Math.min(W.step, st.length-1)); const s=st[W.step]; const nDone=st.filter(x=>W.done[x.key]).length;
+  const where = s.tab==="Contributors"
+    ? `Tab <b>Contributors</b> → ${s.first?`tekan <b>Add Contributor</b> (penulis ${s.author}), lalu `:`masih di formulir penulis ${s.author}, `}isi kolom <b>${esc(s.field)}</b>${s.field==="Country"?" (pilih dari daftar)":""}.`
+    : `Tab <b>${esc(s.tab)}</b>${s.lang?` → pilih bahasa <b>${esc(s.lang)}</b> (pojok kanan atas formulir)`:""} → kolom <b>${esc(s.field)}</b>. Hapus isian lama dulu, lalu tempel.${s.field==="Keywords"?" Setelah ditempel, tekan Enter bila kata kunci belum terpisah.":""}`;
+  return `<div class="card" style="margin-bottom:16px;border:2px solid var(--accent,#4f46e5)"><h3>Panduan tempel ke OJS<span class="r">cara termudah · bisa di HP</span></h3>
+    <p class="small muted" style="margin:0 0 10px">Buka OJS di tab lain: naskah ini → <b>Publication</b>. Ikuti langkah di bawah satu per satu. Setiap selesai satu tab OJS, tekan <b>Save</b> di OJS sebelum pindah tab.</p>
+    <div class="track" style="margin:0 0 6px"><i style="width:${pct(nDone,st.length)}%;background:var(--ok)"></i></div>
+    <div class="small muted" style="margin-bottom:12px">Langkah ${W.step+1} dari ${st.length} · ${nDone} sudah disalin</div>
+    <div style="padding:14px;border-radius:12px;background:var(--surface2,rgba(79,70,229,.06));margin-bottom:12px">
+      <div class="small" style="margin-bottom:8px">📍 ${where}</div>
+      <div style="font-family:var(--serif);line-height:1.6;max-height:180px;overflow:auto;white-space:pre-wrap;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--surface)">${esc(s.val)}</div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button class="btn" data-act="wizprev" ${W.step?"":"disabled"}>← Kembali</button>
+      <button class="btn primary bigbtn" data-act="wizcopy">${W.done[s.key]?"Salin lagi":"Salin"} ${esc(s.field)}</button>
+      <button class="btn" data-act="wiznext" ${W.step<st.length-1?"":"disabled"}>Lanjut →</button>
+      ${nDone===st.length?`<span class="small" style="color:var(--ok)">Semua isian sudah disalin. Tekan Save di OJS, lalu periksa sebelum Schedule For Publication.</span>`:""}
+    </div>
+    <details style="margin-top:12px"><summary class="small" style="cursor:pointer">Lihat semua langkah</summary><ol class="small" style="margin:8px 0 0 18px;padding:0;line-height:1.8">${st.map((x,k)=>`<li><button class="linkish" data-wizgo="${k}">${W.done[x.key]?"✓ ":""}${esc(x.tab)}${x.lang?` (${esc(x.lang)})`:""}${x.author?` · penulis ${x.author}`:""} → ${esc(x.field)}</button></li>`).join("")}</ol></details></div>`;
 }
 
 /* ═════════════ RUN ═════════════ */
@@ -4673,6 +4712,7 @@ document.addEventListener("click", e=>{
   if (b.dataset.simrefdel!=null){ simState().refs.splice(+b.dataset.simrefdel,1); return render(); }
   if (b.dataset.aiunitall!=null){ S.aiUnits = b.dataset.aiunitall==="1" ? null : []; return render(); }
   if (b.dataset.invjenis){ admState().invJenis=b.dataset.invjenis; return render(); }
+  if (b.dataset.wizgo!=null){ S.ojsWiz.step=+b.dataset.wizgo; return render(); }
   if (b.dataset.ojssrc){ ojsState().src=b.dataset.ojssrc; return render(); }
   if (b.dataset.ojscopy){ const el=document.getElementById("ojs_"+b.dataset.ojscopy); return copyText(el?el.value:"", b.dataset.ojslabel); }
   if (b.dataset.revtone){ S.revTone=b.dataset.revtone; return render(); }
@@ -4696,6 +4736,9 @@ document.addEventListener("click", e=>{
   if (a==="ojstrans") return ojsTranslate();
   if (a==="ojsall") return copyText(ojsAllText(), "Semua metadata");
   if (a==="ojsdocx") return sectionDownload("ojs","docx");
+  if (a==="wizcopy"){ const W=S.ojsWiz; const st=ojsSteps(); const s=st[W.step]; if (!s) return; W.done[s.key]=true; copyText(s.val, s.field); return render(); }
+  if (a==="wiznext"){ S.ojsWiz.step++; return render(); }
+  if (a==="wizprev"){ S.ojsWiz.step--; return render(); }
   if (a==="ojsbmcopy") return copyText(ojsBookmarklet(), "Kode bookmark");
   if (a==="ojsconsole") return copyText(ojsScript(), "Skrip konsol");
   if (a==="cmprun") return runCompare();
