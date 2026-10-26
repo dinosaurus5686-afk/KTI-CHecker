@@ -3894,7 +3894,7 @@ function invoiceAkhirText(dom, A){
 }
 
 /* ═════════════ SIAP PUBLISH: METADATA OJS SIAP SALIN ═════════════ */
-const ojsState = () => S.ojs || (S.ojs = {src:"", ed:{}, busy:false, err:""});
+const ojsState = () => S.ojs || (S.ojs = {src:"", ed:{}, busy:false, err:"", trMode:"auto", tr:{key:"", busy:false, err:"", data:null}});
 const OJS_LICENSE = "https://creativecommons.org/licenses/by-sa/4.0/";
 function ojsSource(){ const O=ojsState(); if (O.src) return O.src; return S.inst&&S.inst.done ? "instan" : S.rev&&S.rev.done ? "revisi" : "upload"; }
 function splitPrefix(t){ const m=/^(The|A|An)\s+(.+)$/.exec(String(t||"").trim()); return m ? [m[1], m[2]] : ["", String(t||"").trim()]; }
@@ -3903,22 +3903,26 @@ function ojsData(){
   const O=ojsState(); const src=ojsSource();
   let E=null; try{ E = (src==="upload" && S.ce && S.ce.E && S.ce.src==="upload") ? S.ce.E : extractArticle(src); }catch(e){ console.warn(e); }
   E = E || {judul:"", penulis:[], institusi:[], email:[], abstract_en:"", keywords_en:[], abstrak_id:"", kata_kunci_id:[], rujukan:[]};
-  const A=admState(); const judul=String(E.judul||"").trim(); const lang = detectLang(judul+" "+(E.abstrak_id||"").slice(0,200), "auto");
-  const titleId = lang==="id" ? smartTitle(judul) : (O.ed.title_id||""); const titleEn = lang==="en" ? smartTitle(judul) : (O.ed.title_en_src||"");
+  const A=admState(); const judul=String(E.judul||"").trim(); const lang = ojsLang(judul);
+  const TR=O.tr||(O.tr={key:"",busy:false,err:"",data:null}); const trKey=ojsTrKey(src, E, lang); const tr = O.trMode!=="naskah" && TR.key===trKey && TR.data ? TR.data : null;
+  if (tr){ if (lang==="id"){ E={...E, abstract_en:tr.abstrak||E.abstract_en, keywords_en:tr.kata_kunci.length?tr.kata_kunci:E.keywords_en}; } else { E={...E, abstrak_id:tr.abstrak||E.abstrak_id, kata_kunci_id:tr.kata_kunci.length?tr.kata_kunci:E.kata_kunci_id}; } }
+  const trTitle = tr && tr.judul ? smartTitle(tr.judul) : "";
+  const titleId = lang==="id" ? smartTitle(judul) : (O.ed.title_id||trTitle); const titleEn = lang==="en" ? smartTitle(judul) : (O.ed.title_en_src||trTitle);
+  const trHint = tr ? `Diterjemahkan otomatis dari versi ${lang==="id"?"Bahasa Indonesia":"English"}. Baca sekilas sebelum ditempel.` : "";
   const [pfxEn, tEn] = splitPrefix(titleEn);
   const authors = (E.penulis||[]).map((n,i)=>{ const [g,f]=splitName(n); return {given:g, family:f, email:(E.email||[])[i]||"", affiliation:(E.institusi||[])[i]||(E.institusi||[])[0]||"", country:"Indonesia", primary: i===0 || /\*/.test(n)}; });
   const doi = admDOI(A); const vol=A.vol||"", no=A.no||"", year=A.tahun||String(new Date().getFullYear());
   const F = [];
   const add = (grp, key, label, val, opt={}) => F.push({grp, key, label, val:String(val??""), ...opt});
-  add("Judul & Abstrak (Title & Abstract)","title_id","Title — Bahasa Indonesia", titleId, {hint: lang==="en"?"Judul artikel berbahasa Inggris; isi atau terjemahkan judul Indonesia bila jurnal meminta dua bahasa.":""});
-  add("Judul & Abstrak (Title & Abstract)","abstract_id","Abstract — Bahasa Indonesia", E.abstrak_id, {big:true});
+  add("Judul & Abstrak (Title & Abstract)","title_id","Title — Bahasa Indonesia", titleId, {hint: lang==="en"?(trHint||"Judul artikel berbahasa Inggris; isi atau terjemahkan judul Indonesia bila jurnal meminta dua bahasa."):""});
+  add("Judul & Abstrak (Title & Abstract)","abstract_id","Abstract — Bahasa Indonesia", E.abstrak_id, {big:true, hint: lang==="en"?trHint:""});
   add("Judul & Abstrak (Title & Abstract)","prefix_en","Prefix — English", pfxEn, {hint:"Kata sandang awal judul (The, A, An); kosongkan bila tidak ada."});
-  add("Judul & Abstrak (Title & Abstract)","title_en","Title — English", tEn, {hint: !tEn?"Belum ada judul berbahasa Inggris. Tekan Terjemahkan judul.":""});
-  add("Judul & Abstrak (Title & Abstract)","abstract_en","Abstract — English", E.abstract_en, {big:true});
+  add("Judul & Abstrak (Title & Abstract)","title_en","Title — English", tEn, {hint: !tEn?"Belum ada judul berbahasa Inggris. Tekan Terjemahkan ulang.":lang==="id"?trHint:""});
+  add("Judul & Abstrak (Title & Abstract)","abstract_en","Abstract — English", E.abstract_en, {big:true, hint: lang==="id"?trHint:""});
   authors.forEach((a,i)=>{ const g=`Kontributor (Contributors) — Penulis ${i+1}${a.primary?" · Primary contact":""}`;
     add(g,`a${i}_given`,"Given Name",a.given); add(g,`a${i}_family`,"Family Name",a.family,{hint:a.family?"":"Nama satu kata: isi Given Name saja."}); add(g,`a${i}_email`,"Email",a.email,{hint:a.email?"":"E-mail penulis ini tidak ditemukan di naskah."}); add(g,`a${i}_country`,"Country",a.country); add(g,`a${i}_aff`,"Affiliation",a.affiliation); add(g,`a${i}_role`,"Contributor's role","Author"); });
-  add("Metadata","kw_id","Keywords — Bahasa Indonesia", (E.kata_kunci_id||[]).join(", "), {hint:"Tempel di kolom keyword; setiap kata kunci dipisah koma."});
-  add("Metadata","kw_en","Keywords — English", (E.keywords_en||[]).join(", "));
+  add("Metadata","kw_id","Keywords — Bahasa Indonesia", (E.kata_kunci_id||[]).join(", "), {hint:(lang==="en"&&trHint?trHint+" ":"")+"Tempel di kolom keyword; setiap kata kunci dipisah koma."});
+  add("Metadata","kw_en","Keywords — English", (E.keywords_en||[]).join(", "), {hint: lang==="id"?trHint:""});
   add("Metadata","lang","Language", lang==="en"?"en":"id");
   add("Referensi (References)","refs","References", (E.rujukan||[]).map(r=>String(r).replace(/\*/g,"")).join("\n"), {big:true, hint:"Satu referensi per baris, siap ditempel ke kolom References."});
   add("Identifiers","doi","DOI", doi, {hint: doi?"":"Isi volume, nomor, dan nomor register di menu LOA & Invoice agar DOI terbentuk."});
@@ -3931,24 +3935,44 @@ function ojsData(){
   add("Izin & Hak Cipta (Permissions & Disclosure)","license","License URL", O.ed.license||OJS_LICENSE, {hint:"Sesuaikan dengan lisensi yang dipakai jurnal."});
   add("Galley","galley","Galley label", "PDF"); add("Galley","galleyfile","Nama berkas galley", `NOR_v${vol||"X"}n${no||"X"}_${A.reg||"artikel"}.pdf`);
   F.forEach(f=>{ if (O.ed[f.key]!=null) f.val=O.ed[f.key]; });
-  return {F, E, lang, src};
+  return {F, E, lang, src, trKey};
 }
 async function copyText(t, label){
   try{ await navigator.clipboard.writeText(t); }
   catch(e){ const ta=document.createElement("textarea"); ta.value=t; ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta); ta.select(); try{ document.execCommand("copy"); }catch(_){} ta.remove(); }
   toast(`${label||"Teks"} disalin.`);
 }
+// bahasa artikel = bahasa mayoritas paragraf isi naskah (abstrak dwibahasa tidak menentukan), cadangannya judul
+function ojsLang(judul){ const g = guessDocLang((S.doc&&S.doc.paras)||[]); if (g.en+g.id>=4) return g.en>g.id ? "en" : "id"; return detectLang(judul, "auto"); }
+function ojsTrKey(src, E, lang){ const ab = lang==="en" ? E.abstract_en : E.abstrak_id; const kw = (lang==="en" ? E.keywords_en : E.kata_kunci_id)||[]; const s=[src, lang, E.judul||"", ab||"", kw.join(",")].join("|"); let x=0; for (let i=0;i<s.length;i++) x=(x*31+s.charCodeAt(i))|0; return lang+":"+s.length+":"+x; }
 async function ojsTranslate(){
   const O=ojsState(); if (!S.sample){ toast("Terjemahan memakai Claude; buka di claude.ai."); return; }
-  const {E, lang} = ojsData(); if (!E.judul) return toast("Judul artikel tidak ditemukan.");
-  O.busy=true; render();
-  try{ const r = await S.sample.json(`Terjemahkan judul artikel ilmiah berikut ke ${lang==="en"?"bahasa Indonesia baku":"bahasa Inggris akademik"} dengan Title Case yang benar, tanpa menambah atau mengurangi makna. Balas HANYA JSON {"judul":"..."}\n\n${E.judul}`, {modelTier:"quick"});
-    if (r && r.judul){ if (lang==="en") O.ed.title_id=String(r.judul).trim(); else { O.ed.title_en_src=String(r.judul).trim(); delete O.ed.title_en; delete O.ed.prefix_en; } } }
-  catch(e){ toast("Terjemahan gagal; coba lagi."); }
-  O.busy=false; render();
+  const {E, lang, src, trKey} = ojsData(); const TR=O.tr; if (!E.judul) return toast("Judul artikel tidak ditemukan.");
+  if (TR.busy) return;
+  const toEn = lang!=="en"; const ab = String((toEn ? E.abstrak_id : E.abstract_en)||"").trim(); const kw = (toEn ? E.kata_kunci_id : E.keywords_en)||[];
+  TR.key=trKey; TR.busy=true; TR.err=""; render();
+  const prompt = toEn
+    ? `Anda penerjemah akademik profesional. Terjemahkan metadata artikel jurnal ilmiah berbahasa Indonesia berikut ke bahasa Inggris akademik yang baku dan alami (bukan terjemahan kata per kata): susun ulang kalimat sesuai tata bahasa Inggris yang baik, pakai tenses yang tepat (past tense untuk metode dan hasil penelitian, present tense untuk simpulan dan pernyataan umum), istilah teknis yang lazim dipakai di jurnal internasional, serta artikel (a/an/the) dan kata depan yang benar. Pertahankan makna, angka, singkatan, dan istilah asing apa adanya; jangan menambah atau menghilangkan informasi. Judul memakai Title Case. Kata kunci diterjemahkan satu per satu dengan urutan yang sama, huruf kecil kecuali nama diri/singkatan.\nBalas HANYA JSON {"judul":"...","abstrak":"...","kata_kunci":["..."]}\n\nJUDUL: ${E.judul}\n\nABSTRAK: ${ab||"(tidak ada)"}\n\nKATA KUNCI: ${kw.join("; ")||"(tidak ada)"}`
+    : `Anda penerjemah akademik profesional. Terjemahkan metadata artikel jurnal ilmiah berbahasa Inggris berikut ke bahasa Indonesia ragam ilmiah yang baku (PUEBI/EYD) dan enak dibaca (bukan terjemahan kata per kata): susun kalimat sesuai struktur bahasa Indonesia yang baik, hindari kalimat pasif bertumpuk dan kata serapan yang tidak perlu, gunakan padanan istilah yang lazim di jurnal Indonesia (istilah asing tanpa padanan ditulis miring tidak perlu ditandai). Pertahankan makna, angka, dan singkatan; jangan menambah atau menghilangkan informasi. Judul memakai huruf kapital di awal setiap kata kecuali kata tugas. Kata kunci diterjemahkan satu per satu dengan urutan yang sama, huruf kecil kecuali nama diri/singkatan.\nBalas HANYA JSON {"judul":"...","abstrak":"...","kata_kunci":["..."]}\n\nTITLE: ${E.judul}\n\nABSTRACT: ${ab||"(none)"}\n\nKEYWORDS: ${kw.join("; ")||"(none)"}`;
+  try{
+    const r = await S.sample.json(prompt, {modelTier:"default"});
+    if (!r || !r.judul) throw new Error("kosong");
+    const kk = (Array.isArray(r.kata_kunci) ? r.kata_kunci : String(r.kata_kunci||"").split(/[;,]/)).map(s=>String(s).trim()).filter(Boolean);
+    TR.data = {judul:String(r.judul).trim(), abstrak: ab ? String(r.abstrak||"").trim() : "", kata_kunci: kw.length ? kk : []};
+    // isian bahasa kedua mengikuti terjemahan baru
+    (toEn ? ["title_en_src","title_en","prefix_en","abstract_en","kw_en"] : ["title_id","abstract_id","kw_id"]).forEach(k=>delete O.ed[k]);
+    if (S.ojsWiz) S.ojsWiz.done={};
+  }catch(e){ TR.err="Terjemahan otomatis gagal. Tekan Terjemahkan ulang."; TR.data=null; }
+  TR.busy=false; if (S.view==="ojs") render();
+}
+function ojsAutoTranslate(lang, trKey){
+  const O=ojsState(); const TR=O.tr;
+  if (O.trMode==="naskah" || !S.sample || TR.busy || TR.key===trKey) return;
+  setTimeout(ojsTranslate, 0);
 }
 function vOJS(){
-  const O=ojsState(); const {F, src, lang} = ojsData();
+  const O=ojsState(); const {F, src, lang, E, trKey} = ojsData(); const TR=O.tr; if (E.judul) ojsAutoTranslate(lang, trKey);
+  const L2 = lang==="en" ? "Bahasa Indonesia" : "English";
   const srcs=[["upload","Naskah unggahan"],["revisi","Hasil Revisi Naskah",!(S.rev&&S.rev.done)],["instan","Hasil Revisi Instan",!(S.inst&&S.inst.done)]];
   const groups=[...new Set(F.map(f=>f.grp))];
   const field = f => `<div style="margin:0 0 12px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><label class="small" for="ojs_${f.key}" style="font-weight:600;flex:1">${esc(f.label)}</label><button class="btn sm" data-ojscopy="${f.key}" data-ojslabel="${esc(f.label)}">Salin</button></div>
@@ -3956,8 +3980,11 @@ function vOJS(){
   return `<div class="card" style="margin-bottom:16px"><h3>Siap publish di OJS<span class="r">Nusantara of Research · alur Workflow → Publication</span></h3>
     <p class="small" style="margin:0 0 10px">Semua isian di bawah diekstrak dari artikel dan disusun mengikuti urutan tab publikasi OJS (Title &amp; Abstract, Contributors, Metadata, References, Identifiers, Issue, Permissions &amp; Disclosure, Galleys). Tekan <b>Salin</b> pada setiap kolom lalu tempel di kolom OJS yang sama namanya. Isian bisa diubah dulu bila perlu.</p>
     <div class="toolbar" style="margin:0"><span class="small muted">Sumber artikel:</span><div class="seg" role="group">${srcs.map(([k,l,dis])=>`<button aria-pressed="${src===k}" data-ojssrc="${k}" ${dis?"disabled":""}>${l}</button>`).join("")}</div>
-      <button class="btn sm" data-act="ojstrans" ${O.busy||!S.sample?"disabled":""}>${O.busy?"Menerjemahkan…":lang==="en"?"Terjemahkan judul ke Indonesia":"Terjemahkan judul ke Inggris"}</button>
-      <button class="btn sm" data-act="ojsall">Salin semua</button><button class="btn sm" data-act="ojsdocx">Unduh lembar metadata (.docx)</button></div></div>
+      <button class="btn sm" data-act="ojsall">Salin semua</button><button class="btn sm" data-act="ojsdocx">Unduh lembar metadata (.docx)</button></div>
+    <div class="toolbar" style="margin:10px 0 0"><span class="small muted">Artikel berbahasa <b>${lang==="en"?"Inggris":"Indonesia"}</b> · kolom ${L2}:</span><div class="seg" role="group"><button aria-pressed="${O.trMode!=="naskah"}" data-ojstrmode="auto">Terjemahan otomatis</button><button aria-pressed="${O.trMode==="naskah"}" data-ojstrmode="naskah">Dari naskah</button></div>
+      ${O.trMode!=="naskah"?`<button class="btn sm" data-act="ojstrans" ${TR.busy||!S.sample?"disabled":""}>${TR.busy?"Menerjemahkan…":"Terjemahkan ulang"}</button>
+      <span class="small ${TR.err?"":"muted"}" style="${TR.err?"color:var(--bad,#c62828)":""}">${!S.sample?"Terjemahan otomatis memakai Claude; buka aplikasi di claude.ai.":TR.busy?`Menerjemahkan judul, abstrak, dan kata kunci ke ${L2}…`:TR.err?esc(TR.err):TR.data&&TR.key===trKey?`✓ Judul, abstrak, dan kata kunci ${L2} sudah diterjemahkan otomatis.`:""}</span>`:`<span class="small muted">Memakai judul, abstrak, dan kata kunci ${L2} yang tertulis di naskah.</span>`}
+    </div></div>
     ${vOJSWizard()}<details style="margin-bottom:16px"><summary class="small" style="cursor:pointer;font-weight:600;margin-bottom:10px">Cara otomatis dengan bookmark (untuk komputer, lebih teknis)</summary>${vOJSFill()}</details><h3 style="margin:8px 0 12px;font-size:13px;letter-spacing:.06em;text-transform:uppercase">Semua isian (bisa diedit)</h3>${groups.map(g=>`<div class="card" style="margin-bottom:16px"><h3>${esc(g)}</h3>${F.filter(f=>f.grp===g).map(field).join("")}</div>`).join("")}`;
 }
 function ojsAllText(){ const {F}=ojsData(); let g="", s=""; F.forEach(f=>{ if (f.grp!==g){ s+=`\n=== ${f.grp} ===\n`; g=f.grp; } const v=(document.getElementById("ojs_"+f.key)||{}).value ?? f.val; s+=`${f.label}:\n${v}\n\n`; }); return s.trim(); }
@@ -4714,6 +4741,7 @@ document.addEventListener("click", e=>{
   if (b.dataset.invjenis){ admState().invJenis=b.dataset.invjenis; return render(); }
   if (b.dataset.wizgo!=null){ S.ojsWiz.step=+b.dataset.wizgo; return render(); }
   if (b.dataset.ojssrc){ ojsState().src=b.dataset.ojssrc; return render(); }
+  if (b.dataset.ojstrmode){ ojsState().trMode=b.dataset.ojstrmode; if (S.ojsWiz) S.ojsWiz.done={}; return render(); }
   if (b.dataset.ojscopy){ const el=document.getElementById("ojs_"+b.dataset.ojscopy); return copyText(el?el.value:"", b.dataset.ojslabel); }
   if (b.dataset.revtone){ S.revTone=b.dataset.revtone; return render(); }
   if (b.dataset.revsecall!=null){ S.revSecSel = b.dataset.revsecall==="1" ? [...REV_SECTIONS] : []; return render(); }
