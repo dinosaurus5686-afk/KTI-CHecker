@@ -3904,7 +3904,7 @@ function ojsData(){
   let E=null; try{ E = (src==="upload" && S.ce && S.ce.E && S.ce.src==="upload") ? S.ce.E : extractArticle(src); }catch(e){ console.warn(e); }
   E = E || {judul:"", penulis:[], institusi:[], email:[], abstract_en:"", keywords_en:[], abstrak_id:"", kata_kunci_id:[], rujukan:[]};
   const A=admState(); const judul=String(E.judul||"").trim(); const lang = detectLang(judul+" "+(E.abstrak_id||"").slice(0,200), "auto");
-  const titleId = lang==="id" ? smartTitle(judul) : (O.ed.title_id||""); const titleEn = lang==="en" ? smartTitle(judul) : (O.ed.title_en||"");
+  const titleId = lang==="id" ? smartTitle(judul) : (O.ed.title_id||""); const titleEn = lang==="en" ? smartTitle(judul) : (O.ed.title_en_src||"");
   const [pfxEn, tEn] = splitPrefix(titleEn);
   const authors = (E.penulis||[]).map((n,i)=>{ const [g,f]=splitName(n); return {given:g, family:f, email:(E.email||[])[i]||"", affiliation:(E.institusi||[])[i]||(E.institusi||[])[0]||"", country:"Indonesia", primary: i===0 || /\*/.test(n)}; });
   const doi = admDOI(A); const vol=A.vol||"", no=A.no||"", year=A.tahun||String(new Date().getFullYear());
@@ -3930,7 +3930,7 @@ function ojsData(){
   add("Izin & Hak Cipta (Permissions & Disclosure)","copyyear","Copyright Year", year);
   add("Izin & Hak Cipta (Permissions & Disclosure)","license","License URL", O.ed.license||OJS_LICENSE, {hint:"Sesuaikan dengan lisensi yang dipakai jurnal."});
   add("Galley","galley","Galley label", "PDF"); add("Galley","galleyfile","Nama berkas galley", `NOR_v${vol||"X"}n${no||"X"}_${A.reg||"artikel"}.pdf`);
-  F.forEach(f=>{ if (O.ed[f.key]!=null && !["title_id","title_en","pages","license"].includes(f.key)) f.val=O.ed[f.key]; });
+  F.forEach(f=>{ if (O.ed[f.key]!=null) f.val=O.ed[f.key]; });
   return {F, E, lang, src};
 }
 async function copyText(t, label){
@@ -3943,7 +3943,7 @@ async function ojsTranslate(){
   const {E, lang} = ojsData(); if (!E.judul) return toast("Judul artikel tidak ditemukan.");
   O.busy=true; render();
   try{ const r = await S.sample.json(`Terjemahkan judul artikel ilmiah berikut ke ${lang==="en"?"bahasa Indonesia baku":"bahasa Inggris akademik"} dengan Title Case yang benar, tanpa menambah atau mengurangi makna. Balas HANYA JSON {"judul":"..."}\n\n${E.judul}`, {modelTier:"quick"});
-    if (r && r.judul) O.ed[lang==="en"?"title_id":"title_en"] = String(r.judul).trim(); }
+    if (r && r.judul){ if (lang==="en") O.ed.title_id=String(r.judul).trim(); else { O.ed.title_en_src=String(r.judul).trim(); delete O.ed.title_en; delete O.ed.prefix_en; } } }
   catch(e){ toast("Terjemahan gagal; coba lagi."); }
   O.busy=false; render();
 }
@@ -3958,13 +3958,94 @@ function vOJS(){
     <div class="toolbar" style="margin:0"><span class="small muted">Sumber artikel:</span><div class="seg" role="group">${srcs.map(([k,l,dis])=>`<button aria-pressed="${src===k}" data-ojssrc="${k}" ${dis?"disabled":""}>${l}</button>`).join("")}</div>
       <button class="btn sm" data-act="ojstrans" ${O.busy||!S.sample?"disabled":""}>${O.busy?"Menerjemahkan…":lang==="en"?"Terjemahkan judul ke Indonesia":"Terjemahkan judul ke Inggris"}</button>
       <button class="btn sm" data-act="ojsall">Salin semua</button><button class="btn sm" data-act="ojsdocx">Unduh lembar metadata (.docx)</button></div></div>
-    ${groups.map(g=>`<div class="card" style="margin-bottom:16px"><h3>${esc(g)}</h3>${F.filter(f=>f.grp===g).map(field).join("")}</div>`).join("")}`;
+    ${vOJSFill()}${groups.map(g=>`<div class="card" style="margin-bottom:16px"><h3>${esc(g)}</h3>${F.filter(f=>f.grp===g).map(field).join("")}</div>`).join("")}`;
 }
 function ojsAllText(){ const {F}=ojsData(); let g="", s=""; F.forEach(f=>{ if (f.grp!==g){ s+=`\n=== ${f.grp} ===\n`; g=f.grp; } const v=(document.getElementById("ojs_"+f.key)||{}).value ?? f.val; s+=`${f.label}:\n${v}\n\n`; }); return s.trim(); }
 function ojsModel(){
   const {F}=ojsData(); const groups=[...new Set(F.map(f=>f.grp))]; const blocks=[];
   groups.forEach(g=>{ blocks.push({h:g, lvl:2}); blocks.push({table:{head:["Kolom OJS","Isian"], w:[26,74], rows:F.filter(f=>f.grp===g).map(f=>[cell(f.label,{b:true}), ((document.getElementById("ojs_"+f.key)||{}).value ?? f.val) || "—"])}}); });
   return {count:F.length, title:"Lembar Metadata Publikasi OJS", sub:`${NOR_NAME} · ojs.unpkediri.ac.id/index.php/efektor`, info:baseInfo(), blocks, file:"Metadata_OJS"};
+}
+
+/* ═════════════ ISI OJS OTOMATIS (bookmarklet yang berjalan di halaman OJS) ═════════════ */
+/* Skrip ini dijalankan di halaman Publication OJS dengan sesi login editor; ia memakai REST API OJS (token CSRF halaman). */
+function ojsFillerSource(){
+  return String(async function(D){
+    var css="font:13px/1.45 system-ui,Segoe UI,Arial,sans-serif;color:#1d2433";
+    var m=location.pathname.match(/^(.*?\/index\.php\/[^\/]+)\/(?:workflow|authorDashboard)\/[^\/]+\/(\d+)/);
+    if(!m){ alert("Buka dulu halaman Workflow > Publication naskah di OJS (sambil login), lalu klik bookmark ini lagi."); return; }
+    var api=location.origin+m[1]+"/api/v1", sid=m[2];
+    var tok=(window.pkp&&pkp.currentUser&&pkp.currentUser.csrfToken)||"";
+    if(D.sid && String(D.sid)!==String(sid) && !confirm("Data ini disiapkan untuk naskah "+D.sid+", tetapi halaman ini naskah "+sid+". Tetap lanjutkan?")) return;
+    async function j(u,o){ o=o||{}; var r=await fetch(u,{credentials:"same-origin",method:o.method||"GET",body:o.body,headers:{"Content-Type":"application/json","X-Csrf-Token":tok}}); var t=await r.text(), b; try{ b=JSON.parse(t); }catch(e){ b=t; } if(!r.ok){ var e=new Error((b&&b.errorMessage)||(typeof b==="string"?b.slice(0,200):JSON.stringify(b).slice(0,400))||("HTTP "+r.status)); e.status=r.status; throw e; } return b; }
+    var sub, pub;
+    try{ sub=await j(api+"/submissions/"+sid); var pid=sub.currentPublicationId||(sub.publications&&sub.publications[sub.publications.length-1].id); pub=await j(api+"/submissions/"+sid+"/publications/"+pid); }
+    catch(e){ alert("Data naskah tidak dapat dibaca dari OJS: "+e.message+"\nPastikan Anda login sebagai editor naskah ini."); return; }
+    if(pub.status===3){ alert("Publikasi ini sudah terbit. Buat versi baru (Create New Version) dulu sebelum mengubah metadata."); return; }
+    var locs=Object.keys(pub.title||pub.fullTitle||{}); var L={id:locs.find(function(k){return /^id/.test(k);})||"id", en:locs.find(function(k){return /^en/.test(k);})||"en"};
+    var esc=function(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); };
+    var html=function(s){ return s ? String(s).split(/\n{2,}/).map(function(p){ return "<p>"+esc(p.trim())+"</p>"; }).join("") : s; };
+    var strip=function(s){ return String(s||"").replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim(); };
+    var loc=function(o,k){ return o&&typeof o==="object" ? (o[k]||"") : (o||""); };
+    var C=[]; function add(key,label,oldv,newv,body){ if(newv==null||newv===""||(Array.isArray(newv)&&!newv.length)) return; C.push({key:key,label:label,old:oldv,nw:newv,body:body}); }
+    add("title_id","Title (Indonesian)",loc(pub.title,L.id),D.title_id,function(b){ b.title=Object.assign({},pub.title||{},b.title||{}); b.title[L.id]=D.title_id; });
+    add("title_en","Title (English)",loc(pub.title,L.en),D.title_en,function(b){ b.title=Object.assign({},pub.title||{},b.title||{}); b.title[L.en]=D.title_en; });
+    add("prefix_en","Prefix (English)",loc(pub.prefix,L.en),D.prefix_en,function(b){ b.prefix=Object.assign({},pub.prefix||{},b.prefix||{}); b.prefix[L.en]=D.prefix_en; });
+    add("abstract_id","Abstract (Indonesian)",strip(loc(pub.abstract,L.id)),D.abstract_id,function(b){ b.abstract=Object.assign({},pub.abstract||{},b.abstract||{}); b.abstract[L.id]=html(D.abstract_id); });
+    add("abstract_en","Abstract (English)",strip(loc(pub.abstract,L.en)),D.abstract_en,function(b){ b.abstract=Object.assign({},pub.abstract||{},b.abstract||{}); b.abstract[L.en]=html(D.abstract_en); });
+    add("kw_id","Keywords (Indonesian)",((pub.keywords||{})[L.id]||[]).join(", "),D.kw_id,function(b){ b.keywords=Object.assign({},pub.keywords||{},b.keywords||{}); b.keywords[L.id]=D.kw_id.split(/\s*[,;]\s*/).filter(Boolean); });
+    add("kw_en","Keywords (English)",((pub.keywords||{})[L.en]||[]).join(", "),D.kw_en,function(b){ b.keywords=Object.assign({},pub.keywords||{},b.keywords||{}); b.keywords[L.en]=D.kw_en.split(/\s*[,;]\s*/).filter(Boolean); });
+    add("refs","References",pub.citationsRaw||"",D.refs,function(b){ b.citationsRaw=D.refs; });
+    add("pages","Pages",pub.pages||"",D.pages,function(b){ b.pages=D.pages; });
+    add("copyholder","Copyright Holder",loc(pub.copyrightHolder,L.id)||loc(pub.copyrightHolder,L.en),D.copyholder,function(b){ b.copyrightHolder=Object.assign({},pub.copyrightHolder||{}); b.copyrightHolder[L.id]=D.copyholder; b.copyrightHolder[L.en]=D.copyholder; });
+    add("copyyear","Copyright Year",pub.copyrightYear||"",D.copyyear,function(b){ b.copyrightYear=parseInt(D.copyyear,10)||D.copyyear; });
+    add("license","License URL",pub.licenseUrl||"",D.license,function(b){ b.licenseUrl=D.license; });
+    var ex=(pub.authors||[]).map(function(a){ return (a.email||"").toLowerCase()+"|"+strip(loc(a.givenName,L.en)||loc(a.givenName,L.id)).toLowerCase(); });
+    var newAuthors=(D.authors||[]).filter(function(a){ return !ex.some(function(x){ return (a.email&&x.indexOf(a.email.toLowerCase()+"|")===0) || x.split("|")[1]===String(a.given||"").toLowerCase(); }); });
+    var ov=document.createElement("div"); ov.setAttribute("style","position:fixed;inset:0;z-index:2147483647;background:rgba(10,20,40,.55);display:flex;align-items:center;justify-content:center;"+css);
+    var rows=C.map(function(c,i){ var o=Array.isArray(c.old)?c.old.join(", "):String(c.old||""); var same=strip(o)===strip(c.nw); return "<tr style='border-top:1px solid #e3e8f0'><td style='padding:6px;vertical-align:top'><input type='checkbox' data-i='"+i+"' "+(same?"":"checked")+"></td><td style='padding:6px;vertical-align:top;font-weight:600;white-space:nowrap'>"+c.label+"</td><td style='padding:6px;vertical-align:top;color:#8a93a3'>"+esc((o||"(kosong)").slice(0,140))+"</td><td style='padding:6px;vertical-align:top'>"+esc(String(c.nw).slice(0,140))+(same?" <i style='color:#2e9e5b'>(sudah sama)</i>":"")+"</td></tr>"; }).join("");
+    ov.innerHTML="<div style='background:#fff;border-radius:14px;max-width:980px;width:94vw;max-height:88vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.35)'><div style='padding:16px 20px;background:#1F3864;color:#fff;border-radius:14px 14px 0 0'><b style='font-size:15px'>KTI Checker · Isi metadata OJS otomatis</b><div style='opacity:.85;font-size:12px'>Naskah "+sid+" · periksa lalu tekan Terapkan. Isian yang dicentang akan menimpa isian OJS saat ini.</div></div><div style='padding:12px 20px'><table style='width:100%;border-collapse:collapse;font-size:12.5px'><thead><tr style='text-align:left;color:#55607a'><th></th><th style='padding:6px'>Kolom</th><th style='padding:6px'>Isian OJS sekarang</th><th style='padding:6px'>Isian baru</th></tr></thead><tbody>"+rows+"</tbody></table>"+
+      "<label style='display:flex;gap:8px;margin:12px 0 0;align-items:flex-start'><input type='checkbox' id='ktiAuth'><span><b>Tambahkan Contributors</b> ("+newAuthors.length+" penulis belum terdaftar: "+esc(newAuthors.map(function(a){return [a.given,a.family].join(" ");}).join(", ")||"tidak ada")+"). Penulis yang sudah ada tidak digandakan.</span></label></div>"+
+      "<div style='padding:12px 20px 18px;display:flex;gap:10px;justify-content:flex-end'><button id='ktiNo' style='padding:8px 16px;border-radius:8px;border:1px solid #c9d1de;background:#fff;cursor:pointer'>Batal</button><button id='ktiGo' style='padding:8px 18px;border-radius:8px;border:0;background:#4f46e5;color:#fff;font-weight:700;cursor:pointer'>Terapkan</button></div></div>";
+    document.body.appendChild(ov);
+    ov.querySelector("#ktiNo").onclick=function(){ ov.remove(); };
+    ov.querySelector("#ktiGo").onclick=async function(){
+      var btn=this; btn.disabled=true; btn.textContent="Menyimpan…";
+      var sel=[].slice.call(ov.querySelectorAll("input[data-i]")).filter(function(x){return x.checked;}).map(function(x){return C[+x.getAttribute("data-i")];});
+      var body={}; sel.forEach(function(c){ c.body(body); }); var msg=[];
+      try{ if(sel.length){ await j(api+"/submissions/"+sid+"/publications/"+pub.id,{method:"PUT",body:JSON.stringify(body)}); msg.push(sel.length+" kolom tersimpan: "+sel.map(function(c){return c.label;}).join(", ")); } }
+      catch(e){ alert("Gagal menyimpan metadata: "+e.message); btn.disabled=false; btn.textContent="Terapkan"; return; }
+      if(ov.querySelector("#ktiAuth").checked && newAuthors.length){
+        var ug=(pub.authors&&pub.authors[0]&&pub.authors[0].userGroupId)||null; var ok=0, fail="";
+        if(!ug) fail="ID peran penulis (user group) tidak ditemukan; tambahkan penulis secara manual.";
+        else for(var i=0;i<newAuthors.length;i++){ var a=newAuthors[i]; var nm={}; nm[L.id]=a.given; nm[L.en]=a.given; var fm={}; fm[L.id]=a.family; fm[L.en]=a.family; var af={}; af[L.id]=a.affiliation; af[L.en]=a.affiliation;
+          try{ await j(api+"/submissions/"+sid+"/publications/"+pub.id+"/contributors",{method:"POST",body:JSON.stringify({givenName:nm,familyName:fm,email:a.email||("penulis"+(i+1)+"@belum-diisi.invalid"),country:"ID",affiliation:af,userGroupId:ug,includeInBrowse:true,publicationId:pub.id})}); ok++; }
+          catch(e){ fail=e.status===404?"Versi OJS ini belum mendukung penambahan contributors lewat API; tambahkan secara manual.":e.message; break; } }
+        msg.push(ok+" contributor ditambahkan"+(fail?" ("+fail+")":""));
+      }
+      ov.remove(); alert("Selesai.\n\n"+(msg.join("\n")||"Tidak ada perubahan.")+"\n\nHalaman akan dimuat ulang; periksa hasilnya sebelum Schedule For Publication."); location.reload();
+    };
+  });
+}
+function ojsFillerData(){
+  const {F} = ojsData(); const v = k => { const el=document.getElementById("ojs_"+k); const f=F.find(x=>x.key===k); return String((el?el.value:(f?f.val:""))||"").trim(); };
+  const authors=[]; for (let i=0; F.some(f=>f.key===`a${i}_given`); i++) authors.push({given:v(`a${i}_given`), family:v(`a${i}_family`), email:v(`a${i}_email`), affiliation:v(`a${i}_aff`)});
+  return {sid: admState().reg||"", title_id:v("title_id"), title_en:v("title_en"), prefix_en:v("prefix_en"), abstract_id:v("abstract_id"), abstract_en:v("abstract_en"), kw_id:v("kw_id"), kw_en:v("kw_en"), refs:v("refs"), pages:v("pages"), copyholder:v("copyholder"), copyyear:v("copyyear"), license:v("license"), authors};
+}
+function ojsScript(){ return `(${ojsFillerSource()})(${JSON.stringify(ojsFillerData()).replace(/</g,"\\u003c")});`; }
+const ojsBookmarklet = () => "javascript:" + encodeURIComponent(ojsScript());
+function vOJSFill(){
+  const d = ojsFillerData();
+  return `<div class="card" style="margin-bottom:16px;border:1px solid var(--accent,#4f46e5)"><h3>Isi OJS otomatis<span class="r">bookmarklet · naskah ${esc(d.sid||"—")}</span></h3>
+    <ol class="small" style="margin:0 0 12px 18px;padding:0;line-height:1.7">
+      <li>Seret tombol <b>⚡ Isi OJS – ${esc(d.sid||"naskah")}</b> ke bilah bookmark browser Anda (atau salin kodenya lalu buat bookmark baru dan tempel di kolom URL).</li>
+      <li>Login ke OJS dan buka naskah ini: <b>Workflow → Publication</b>.</li>
+      <li>Klik bookmark tersebut. Akan muncul jendela perbandingan <i>isian OJS sekarang ↔ isian baru</i>; centang yang ingin diterapkan, lalu tekan <b>Terapkan</b>.</li>
+    </ol>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <a class="btn primary" href="${esc(ojsBookmarklet())}" data-bookmarklet="1" draggable="true" title="Seret ke bilah bookmark">⚡ Isi OJS – ${esc(d.sid||"naskah")}</a>
+      <button class="btn sm" data-act="ojsbmcopy">Salin kode bookmark</button><button class="btn sm" data-act="ojsconsole">Salin skrip konsol</button></div>
+    <p class="small muted" style="margin:10px 0 0">Yang diisi: Title, Prefix, dan Abstract (Indonesia & Inggris), Keywords, References, Pages, Copyright Holder/Year, dan License URL. Contributors opsional (penulis yang sudah ada tidak digandakan). Skrip berjalan di OJS memakai sesi login Anda dan tidak mengirim data ke tempat lain. Bila isian di bawah diubah, tombol ini otomatis memakai isian terbaru. Data disiapkan untuk naskah nomor register <b>${esc(d.sid||"(belum diisi di LOA & Invoice)")}</b>; bila dijalankan di naskah lain, akan muncul peringatan.</p></div>`;
 }
 
 /* ═════════════ RUN ═════════════ */
@@ -4615,6 +4696,8 @@ document.addEventListener("click", e=>{
   if (a==="ojstrans") return ojsTranslate();
   if (a==="ojsall") return copyText(ojsAllText(), "Semua metadata");
   if (a==="ojsdocx") return sectionDownload("ojs","docx");
+  if (a==="ojsbmcopy") return copyText(ojsBookmarklet(), "Kode bookmark");
+  if (a==="ojsconsole") return copyText(ojsScript(), "Skrip konsol");
   if (a==="cmprun") return runCompare();
   if (a==="instrun") return runInstant();
   if (a==="inststop") return S.inst && S.inst.ctl && S.inst.ctl.abort();
@@ -4671,6 +4754,8 @@ const profileChanged = () => { if (S.local){ invalidate(); toast("Pilihan diubah
 $("#selJenis").addEventListener("change", e=>{ S.jenis=e.target.value; profileChanged(); });
 $("#selTahap").addEventListener("change", e=>{ S.tahap=e.target.value; profileChanged(); });
 
+document.addEventListener("input", e=>{ if (e.target.dataset && e.target.dataset.ojsed){ ojsState().ed[e.target.dataset.ojsed]=e.target.value; const a=document.querySelector("a[data-bookmarklet]"); if (a) a.setAttribute("href", ojsBookmarklet()); } });
+document.addEventListener("click", e=>{ const a=e.target.closest && e.target.closest("a[data-bookmarklet]"); if (a){ e.preventDefault(); e.stopPropagation(); toast("Seret tombol ini ke bilah bookmark browser, lalu klik bookmark itu di halaman Publication OJS."); } }, true);
 /* ═════════════ BOOT ═════════════ */
 (async()=>{
   loadJR();
