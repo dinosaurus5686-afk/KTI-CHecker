@@ -1481,13 +1481,14 @@ Temuan otomatis utama: ${S.local.all.filter(f=>f.sev==="error").slice(0,20).map(
 Ketentuan menulis review:
 - Bersikap keras, kritis, dan spesifik seperti reviewer jurnal bereputasi; jangan memuji berlebihan. Tunjukkan kelemahan yang membuat artikel layak ditolak, lalu beri saran perbaikan yang jelas dan dapat langsung dikerjakan penulis.
 - Untuk tiap bagian beri "nilai" 0–100 dan 1–3 "komentar". Tiap komentar: "masalah" (1–2 kalimat sederhana dalam bahasa sehari-hari yang sopan, langsung menyebut apa yang kurang atau salah, tanpa simbol, tanda kurung berlapis, atau daftar; maksimal 35 kata), "saran" (1–2 kalimat tindakan perbaikan yang jelas, boleh dengan satu contoh singkat; maksimal 40 kata), "tingkat" (error = wajib diperbaiki, warning = sebaiknya diperbaiki, info = catatan).
-- "kutipan" WAJIB disalin PERSIS kata demi kata dari artikel (maksimal 20 kata) agar dapat dicocokkan otomatis; jika komentar bersifat umum, isi string kosong. Jangan mengarang isi yang tidak ada di artikel.
+${SCOPE_RULE}
+- Jika komentar berlaku untuk seluruh bagian yang dinilai, pakai cakupan "bagian" dan kosongkan kutipan. Jangan mengarang isi yang tidak ada di artikel.
 - Bagian APA Style menilai kepatuhan kutipan dalam teks dan daftar rujukan terhadap APA edisi 7.
 - "rekomendasi" salah satu dari: ${DECISIONS.join(", ")}.
 - Bahasa Indonesia baku.
 
 Balas HANYA dengan satu objek JSON:
-{"rekomendasi":"...","skor":0-100,"ringkasan":"3-4 kalimat penilaian umum","bagian":[${revSecs().map(s=>`{"bagian":"${s}","nilai":0,"komentar":[{"tingkat":"error","masalah":"...","kutipan":"...","saran":"..."}]}`).join(",")}]}
+{"rekomendasi":"...","skor":0-100,"ringkasan":"3-4 kalimat penilaian umum","bagian":[${revSecs().map(s=>`{"bagian":"${s}","nilai":0,"komentar":[{"tingkat":"error","masalah":"...","cakupan":"kalimat","kutipan":"...","kutipan_akhir":"","saran":"..."}]}`).join(",")}]}
 
 ARTIKEL:
 """
@@ -1526,9 +1527,9 @@ async function runReview(){
       const bag = revSecs().map(name=>{
         const src = arr(r.bagian).find(b=>fold(b.bagian||"").startsWith(fold(name).slice(0,6))) || {};
         const kom = arr(src.komentar).map((c,k)=>{
-          const v = verifyQuote(String(c.kutipan||""));
+          const v = verifyQuote(String(c.kutipan||"")); const sc = normScope(c.cakupan||(c.kutipan?"frasa":"bagian")); const v2 = c.kutipan_akhir ? verifyQuote(String(c.kutipan_akhir)) : {};
           const bab = v.p!=null ? S.local.M.paras[v.p].bab : (REV_BAB[name]||"");
-          return {id:`R${i}${name}${k}`, ai:true, cat:"ai", kat:name, reviewer:`Reviewer ${i+1}`, sev:sevOf(c.tingkat), title:String(c.masalah||"Catatan"), detail:"", fix:String(c.saran||""), quote:v.q||String(c.kutipan||""), p:v.p, verified:v.ok, babAI:bab, occ:v.p!=null&&v.q?[{p:v.p,q:v.q}]:[]};
+          return {id:`R${i}${name}${k}`, ai:true, cat:"ai", kat:name, reviewer:`Reviewer ${i+1}`, sev:sevOf(c.tingkat), title:String(c.masalah||"Catatan"), detail:"", fix:String(c.saran||""), quote:v.q||String(c.kutipan||""), p:v.p, verified:v.ok, babAI:bab, scope:sc, p2:v2.p, quoteEnd:String(c.kutipan_akhir||""), occ:v.p!=null&&v.q?[{p:v.p,q:v.q}]:[]};
         });
         return {bagian:name, nilai:Math.max(0,Math.min(100,Math.round(+src.nilai||0))), komentar:kom};
       });
@@ -2580,12 +2581,12 @@ function adviceText(fix, wajib){
 const lowerDec = d => String(d||"").toLowerCase();
 function reviewComments(only){
   const ai=S.ai, O=cmtOpt(), out=[]; if (!ai) return out;
-  const finding = (who, author, f) => ({who, author, p:f.p, quote:f.quote||"", kat:f.kat||f.babAI||"", lines:[sentence(f.title)+(f.detail?" "+sentence(f.detail):""), adviceText(f.fix, f.sev==="error")]});
+  const finding = (who, author, f) => ({who, author, p:f.p, quote:f.quote||"", scope:f.scope, p2:f.p2, quoteEnd:f.quoteEnd||"", bab:f.babAI||"", kat:f.kat||f.babAI||"", lines:[sentence(f.title)+(f.detail?" "+sentence(f.detail):""), adviceText(f.fix, f.sev==="error")]});
   if (ai.mode==="review"){
     if (O.editor) out.push({who:"Editor", author:revName("Editor"), p:null, quote:"", lines:[`Keputusan editor untuk naskah ini adalah ${lowerDec(ai.keputusan)}.`, sentence(ai.ringkasan)]});
     if (O.umum) ai.reviewers.forEach(r=>out.push({who:r.nama, author:revName(r.nama), p:null, quote:"", lines:[`Rekomendasi saya untuk naskah ini adalah ${lowerDec(r.rekomendasi)}.`, sentence(r.ringkasan)]}));
     ai.findings.filter(incl).forEach(f=>out.push(finding(f.reviewer, revName(f.reviewer), f)));
-    if (O.editor) ai.petunjuk.filter(incl).forEach(pt=>{ const f = ai.findings.find(x=>x.p!=null && fold(x.kat).startsWith(fold(pt.bagian).slice(0,6))); out.push({who:"Editor", author:revName("Editor"), p:f?f.p:null, quote:"", kat:pt.bagian, lines:[adviceText(pt.langkah, pt.prioritas==="wajib").replace(/^Sebaiknya /,"Mohon "), pt.contoh?"Contohnya: "+plainText(pt.contoh).replace(/^contoh\s*:\s*/i,""):""]}); });
+    if (O.editor) ai.petunjuk.filter(incl).forEach(pt=>{ const f = ai.findings.find(x=>x.p!=null && fold(x.kat).startsWith(fold(pt.bagian).slice(0,6))); out.push({who:"Editor", author:revName("Editor"), p:f?f.p:null, quote:"", scope:"bagian", bab:REV_BAB[REV_SECTIONS.find(s=>fold(pt.bagian).startsWith(fold(s).slice(0,6)))]||"", kat:pt.bagian, lines:[adviceText(pt.langkah, pt.prioritas==="wajib").replace(/^Sebaiknya /,"Mohon "), pt.contoh?"Contohnya: "+plainText(pt.contoh).replace(/^contoh\s*:\s*/i,""):""]}); });
   } else {
     ai.findings.filter(incl).forEach(f=>out.push(finding("Claude", revName("Claude"), f)));
   }
@@ -2685,12 +2686,13 @@ async function buildCommentedDocx(only){
   let cXml = zip.file("word/comments.xml") ? await zip.file("word/comments.xml").async("string") : "";
   let nextId = 0; (cXml.match(/w:id="(\d+)"/g)||[]).forEach(m=>{ nextId=Math.max(nextId, +m.replace(/\D/g,"")+1); });
   const date = new Date().toISOString().replace(/\.\d+Z$/,"Z");
+  const memo=new Map(); const scopeCount={};
   let comments = reviewComments(only); if (cmtOpt().sederhana && S.sample){ if (S.view==="ai") toast("Claude menyederhanakan bahasa komentar…"); comments = await simplifyComments(comments); } let placed=0, general=0, out="";
   for (const c of comments){
-    const id=nextId++; let loc = (c.p!=null || c.quote) ? locate(paras, cache, c) : null;
-    if (!loc){ loc={i:titleIdx, s:null, e:null}; general++; if ((c.p!=null || c.quote) && c.kat) c.lines[0] = `Catatan untuk bagian ${plainText(c.kat).toLowerCase()}: ` + c.lines[0][0].toLowerCase() + c.lines[0].slice(1); } else placed++;
-    if (!paras[loc.i]) continue;
-    anchorComment(dom, paras[loc.i], loc.s, loc.e, id);
+    const id=nextId++; const wants = c.p!=null || c.quote || c.scope==="bagian"; let loc = wants ? locateScope(paras, cache, c, memo) : null;
+    if (!loc){ loc={i1:titleIdx, i2:titleIdx}; general++; if (wants && c.kat) c.lines[0] = `Catatan untuk bagian ${plainText(c.kat).toLowerCase()}: ` + c.lines[0][0].toLowerCase() + c.lines[0].slice(1); } else { placed++; scopeCount[loc.scope]=(scopeCount[loc.scope]||0)+1; }
+    if (!paras[loc.i1] || !paras[loc.i2]) continue;
+    if (loc.i2>loc.i1) anchorMulti(dom, paras[loc.i1], paras[loc.i2], id); else anchorComment(dom, paras[loc.i1], loc.s??null, loc.e??null, id);
     out += commentXML(id, c, date);
   }
   cXml = cXml ? cXml.replace(/<\/w:comments>\s*$/, out+"</w:comments>") : `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:comments xmlns:w="${W_NS}">${out}</w:comments>`;
@@ -2703,7 +2705,7 @@ async function buildCommentedDocx(only){
   if (!/PartName="\/word\/comments\.xml"/.test(ct)) ct = ct.replace("</Types>", `<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/></Types>`);
   zip.file("[Content_Types].xml", ct);
   const blob = await zip.generateAsync({type:"blob", mimeType:DOCX_MIME});
-  return {blob, total:comments.length, placed, general};
+  return {blob, total:comments.length, placed, general, scopeCount};
 }
 
 /* ── laporan hasil review (.docx) ── */
@@ -2718,7 +2720,7 @@ async function reviewDownload(kind){
     const r = await buildCommentedDocx(only);
     if (!r.total) return toast(`Tidak ada komentar dari ${revName(only)}.`);
     const who = only ? "_"+revName(only).replace(/[^\p{L}\p{N}]+/gu,"_").replace(/^_|_$/g,"") : "_Semua_Reviewer";
-    return saveFile(`Review${who}_${baseName()}.docx`, r.blob, `${only?revName(only):"Gabungan"}: ${r.total} komentar (${r.placed} menempel di teks${r.general?`, ${r.general} di judul`:""}).`);
+    return saveFile(`Review${who}_${baseName()}.docx`, r.blob, `${only?revName(only):"Gabungan"}: ${r.total} komentar (${r.placed} menempel di teks${Object.keys(r.scopeCount||{}).length?": "+Object.entries(r.scopeCount).map(([k,v])=>`${v} ${SCOPE_LAB[k]||k}`).join(", "):""}${r.general?`; ${r.general} di judul`:""}).`);
   }catch(e){ console.error(e); toast("Dokumen gagal dibuat: "+(e.message||e)); }
 }
 function vReviewDl(){
@@ -3759,6 +3761,98 @@ function finalizeModel(m){
   return m;
 }
 
+/* ═════════════ CAKUPAN KOMENTAR: frasa · kalimat · paragraf · beberapa paragraf · bagian ═════════════ */
+const SCOPES = ["frasa","kalimat","paragraf","beberapa_paragraf","bagian"];
+const SCOPE_LAB = {frasa:"frasa", kalimat:"kalimat", paragraf:"paragraf", beberapa_paragraf:"beberapa paragraf", bagian:"satu bagian/bab"};
+const normScope = s => { s=String(s||"").toLowerCase().replace(/\s+/g,"_"); if (/beberapa|multi|paragraf_/.test(s)) return "beberapa_paragraf"; if (/bab|bagian|section/.test(s)) return "bagian"; return SCOPES.includes(s) ? s : (s.startsWith("par")?"paragraf":s.startsWith("kal")||s.startsWith("sent")?"kalimat":"frasa"); };
+const SCOPE_RULE = `- "cakupan" menunjukkan luas teks yang dikomentari, pilih yang PALING SEMPIT tetapi tepat: "frasa" (kata/frasa), "kalimat" (satu kalimat), "paragraf" (satu paragraf utuh), "beberapa_paragraf" (dua paragraf atau lebih yang berurutan), atau "bagian" (satu bagian/bab utuh).
+- "kutipan" WAJIB disalin PERSIS kata demi kata dari naskah agar dapat ditandai otomatis: untuk "frasa" salin frasanya; untuk "kalimat" salin kalimatnya utuh; untuk "paragraf" salin 8–15 kata PERTAMA paragraf itu; untuk "beberapa_paragraf" salin 8–15 kata pertama paragraf pertama DAN isi "kutipan_akhir" dengan 8–15 kata pertama paragraf terakhir; untuk "bagian" kosongkan kutipan. Jangan mengarang teks yang tidak ada.`;
+/* posisi akhir kalimat di sekitar rentang [s,e) */
+function sentenceSpan(text, s, e){
+  let a=s; while (a>0 && !/[.!?]/.test(text[a-1]) ) a--; while (a<s && /\s/.test(text[a])) a++;
+  if (a>0 && /\d/.test(text[a-2]||"") && /\d/.test(text[a]||"")) a=0;
+  let b=e; while (b<text.length && !(/[.!?]/.test(text[b]) && (b+1>=text.length || /\s/.test(text[b+1])))) b++; if (b<text.length) b++;
+  return [a, Math.max(b, e)];
+}
+const tokArr = s => words(fold(s)).filter(w=>w.length>1);
+function fuzzySentence(text, quote){
+  const qt=tokArr(quote); if (qt.length<3) return null; const qs=new Set(qt);
+  const sents=[]; const re=/[^.!?]+[.!?]*/g; let m; while ((m=re.exec(text))){ if (m[0].trim()) sents.push([m.index, m.index+m[0].length, m[0]]); }
+  let best=null, bs=0; sents.forEach(([a,b,t])=>{ const st=new Set(tokArr(t)); let k=0; qs.forEach(w=>{ if (st.has(w)) k++; }); const sc=k/qs.size; if (sc>bs){ bs=sc; best=[a,b]; } });
+  if (!best || bs<0.7) return null; let [a,b]=best; while (a<b && /\s/.test(text[a])) a++; while (b>a && /\s/.test(text[b-1])) b--; const out=[a,b]; out.score=bs; return out;
+}
+function docParaIndex(paras, cache, pIdx, quote, memo){
+  if (pIdx==null || !S.local || !S.local.M.paras[pIdx]) return null;
+  if (memo.has(pIdx)) return memo.get(pIdx);
+  const t = normStr(S.local.M.paras[pIdx].text); let i=-1;
+  if (t){ i = cache.findIndex(c=>c===t); if (i<0 && t.length>20) i = cache.findIndex(c=>c && (c.startsWith(t.slice(0,60)) || t.startsWith(c.slice(0,60)) && c.length>20)); }
+  if (i<0 && quote){ const q=normStr(quote); if (q.length>=6) i = cache.findIndex(c=>c.includes(q)); }
+  const r = i<0 ? null : i; memo.set(pIdx, r); return r;
+}
+function locateScope(paras, cache, c, memo){
+  const M=S.local.M; const scope = c.scope || (c.quote ? "frasa" : "paragraf");
+  if (scope==="bagian"){
+    const bab = c.bab || (c.p!=null && M.paras[c.p] ? M.paras[c.p].bab : ""); if (!bab) return null;
+    const ps = M.paras.filter(p=>p.bab===bab && p.text && p.tag!=="img" && !p.toc); if (!ps.length) return null;
+    const i1=docParaIndex(paras, cache, ps[0].i, "", memo); let i2=null; for (let k=ps.length-1;k>=0 && i2==null;k--) i2=docParaIndex(paras, cache, ps[k].i, "", memo);
+    return i1!=null && i2!=null && i2>=i1 ? {i1, i2, scope} : null;
+  }
+  let i1 = docParaIndex(paras, cache, c.p, c.quote, memo);
+  if (i1==null && c.quote){ const q=normStr(c.quote); if (q.length>=6){ const k=cache.findIndex(x=>x.includes(q)); if (k>=0) i1=k; } }
+  if (i1==null && c.quote && (scope==="frasa"||scope==="kalimat")){
+    /* kutipan tidak persis: cari kalimat paling mirip (≥ 70% kata) di bab yang dirujuk */
+    const pool = M.paras.filter(p=>p.text && p.tag!=="img" && p.tag!=="table" && (!c.bab || p.bab===c.bab));
+    let best=null; pool.forEach(p=>{ const di=docParaIndex(paras, cache, p.i, "", memo); if (di==null) return; const fz=fuzzySentence(charMap(paras[di]).text, c.quote); if (fz && (!best || fz.score>best.score)) best={i:di, s:fz[0], e:fz[1], score:fz.score}; });
+    return best ? {i1:best.i, i2:best.i, s:best.s, e:best.e, scope:"kalimat"} : null;
+  }
+  if (i1==null) return null;
+  if (scope==="paragraf") return {i1, i2:i1, scope};
+  if (scope==="beberapa_paragraf"){ let i2 = c.p2!=null && c.p2>c.p ? docParaIndex(paras, cache, c.p2, c.quoteEnd, memo) : null; if (i2==null && c.quoteEnd){ const q=normStr(c.quoteEnd); const k=cache.findIndex((x,j)=>j>i1 && x.includes(q)); if (k>=0) i2=k; } return {i1, i2: i2!=null && i2>i1 ? i2 : i1, scope: i2!=null && i2>i1 ? scope : "paragraf"}; }
+  /* frasa / kalimat */
+  const {text} = charMap(paras[i1]); const {n, idx} = normIdx(text); const q = normStr(c.quote||"");
+  let s=null, e=null;
+  if (q.length>=3){ const at=n.indexOf(q); if (at>=0){ s=idx[at]; e=idx[at+q.length-1]+1; } }
+  if (s==null){ const fz = c.quote ? fuzzySentence(text, c.quote) : null; if (fz) return {i1, i2:i1, s:fz[0], e:fz[1], scope:"kalimat"}; return null; }
+  if (scope==="kalimat"){ const [a,b]=sentenceSpan(text, s, e); return {i1, i2:i1, s:a, e:b, scope}; }
+  return {i1, i2:i1, s, e, scope:"frasa"};
+}
+function anchorMulti(dom, pA, pB, id){
+  const refRun = () => { const r=wEl(dom,"w:r"); const rp=wEl(dom,"w:rPr"); rp.appendChild(wEl(dom,"w:rStyle",{val:"CommentReference"})); r.appendChild(rp); r.appendChild(wEl(dom,"w:commentReference",{id})); return r; };
+  const pPrA=[...pA.childNodes].find(x=>x.nodeName==="w:pPr"); pA.insertBefore(wEl(dom,"w:commentRangeStart",{id}), pPrA?pPrA.nextSibling:pA.firstChild);
+  pB.appendChild(wEl(dom,"w:commentRangeEnd",{id})); pB.appendChild(refRun());
+}
+
+/* ═════════════ TINJAUAN SKRIPSI: KESELURUHAN ATAU PER BAB ═════════════ */
+const aiSel = () => { const all=S.local?unitsForRevision():[]; return S.aiUnits ? all.filter(u=>S.aiUnits.includes(u)) : all; };
+function docForAIUnits(units, limit=AI_LIMIT){
+  const M=S.local.M; const set=new Set(units); let s="", last=null;
+  for (const p of M.paras){
+    if (p.toc || !set.has(p.bab)) continue;
+    if (p.bab!==last){ s+=`\n===== ${p.bab} =====\n`; last=p.bab; }
+    const line=(p.isBab?"## ":p.isHead?"### ":p.tag==="table"?"[TABEL]\n":p.tag==="img"?"[GAMBAR]":p.tag==="li"?"- ":"")+p.text;
+    if (s.length+line.length>limit){ s+="\n[…naskah dipotong…]"; break; } s+=line+"\n";
+  }
+  return s;
+}
+function mergeAIResults(results, groups){
+  if (results.length===1) return results[0];
+  const arr=v=>Array.isArray(v)?v:[]; const nil = results.map(r=>+r.skor||0);
+  return {skor:Math.round(nil.reduce((a,b)=>a+b,0)/Math.max(1,nil.length)),
+    ringkasan: results.map((r,k)=>`${groups[k].join(", ")}: ${String(r.ringkasan||"").trim()}`).join(" "),
+    kekuatan: [...new Set(results.flatMap(r=>arr(r.kekuatan).map(String)))].slice(0,8),
+    prioritas: [...new Set(results.flatMap(r=>arr(r.prioritas).map(String)))].slice(0,8),
+    per_bab: results.flatMap(r=>arr(r.per_bab)),
+    konsistensi: results.flatMap(r=>arr(r.konsistensi)).filter((x,k,a)=>a.findIndex(y=>y.aspek===x.aspek)===k),
+    temuan: results.flatMap(r=>arr(r.temuan))};
+}
+function vAIScope(){
+  if (!S.local) return "";
+  const all=unitsForRevision(); const sel=aiSel(); const allSel = sel.length===all.length;
+  return `<div style="margin-top:12px"><div class="small muted" style="margin-bottom:6px">Cakupan tinjauan: <b>${allSel?"keseluruhan naskah":`${sel.length} dari ${all.length} bab`}</b> · <button class="linkish" data-aiunitall="1">semua</button> · <button class="linkish" data-aiunitall="0">kosongkan</button></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">${all.map(u=>`<label class="toggle" style="padding:6px 10px"><input type="checkbox" data-aiunit="${esc(u)}" ${sel.includes(u)?"checked":""}><span class="small">${esc(u)}</span></label>`).join("")}</div>
+    <label class="toggle" style="margin-top:8px;padding:7px 10px"><input type="checkbox" id="aiPerBab" ${S.aiPerBab?"checked":""} ${sel.length>1?"":"disabled"}><span class="small"><b>Tinjau tiap bab secara terpisah</b> (lebih detail; ${sel.length} permintaan ke Claude)</span></label></div>`;
+}
+
 /* ═════════════ RUN ═════════════ */
 const WEIGHTS = {struktur:{e:5,w:2,cap:25},isi:{e:3,w:1,cap:15},abstrak:{e:3,w:1.5,cap:12},bahasa:{e:1.5,w:.5,cap:12},sitasi:{e:2,w:1,cap:16},visual:{e:2,w:1,cap:8},format:{e:3,w:1.5,cap:12}};
 const STEPS = ["Membaca susunan bab dan sub-bab","Memeriksa isi setiap bab","Memeriksa abstrak dan kata kunci","Memeriksa ejaan dan diksi","Mencocokkan sitasi dengan daftar pustaka","Memeriksa tabel, gambar, dan format"];
@@ -4010,8 +4104,8 @@ function vAI(){
   const head = `<div class="card"><h3>Tinjauan substansi oleh Claude<span class="r">${len>AI_LIMIT?`${Math.round(AI_LIMIT/1000)} rb dari ${Math.round(len/1000)} rb karakter dikirim`:`${Math.round(len/1000)||1} rb karakter`}</span></h3>
     <div class="toolbar" style="margin-bottom:0">${modes}
     ${S.aiBusy?`<button class="btn sm" data-act="stop">Hentikan</button>`:`<button class="btn primary sm" data-act="ai">${ai?"Tinjau ulang":"Mulai tinjauan"}</button>`}
-    <span class="small muted">${S.aiMode==="teliti"?"Model paling teliti; biasanya 1–3 menit.":"Lebih cepat, analisis lebih ringkas."} Memakai kuota akun Claude Anda.</span></div>
-    ${S.aiBusy?`<div style="display:flex;gap:10px;align-items:center;margin-top:14px"><div class="spinner"></div><span class="small">${S.aiStream?`Claude menulis laporan… ${S.aiStream.length.toLocaleString("id-ID")} karakter`:"Claude sedang membaca dan menimbang naskah…"}</span></div>${S.aiStream?`<div class="stream" style="margin-top:10px">${esc(S.aiStream.slice(-600))}</div>`:""}`:""}
+    <span class="small muted">${S.aiMode==="teliti"?"Model paling teliti; biasanya 1–3 menit.":"Lebih cepat, analisis lebih ringkas."} Memakai kuota akun Claude Anda.</span></div>${S.aiBusy?"":vAIScope()}
+    ${S.aiBusy?`<div style="display:flex;gap:10px;align-items:center;margin-top:14px"><div class="spinner"></div><span class="small">${S.aiStep?`Meninjau ${esc(S.aiStep)} · `:""}${S.aiStream?`Claude menulis laporan… ${S.aiStream.length.toLocaleString("id-ID")} karakter`:"Claude sedang membaca dan menimbang naskah…"}</span></div>${S.aiStream?`<div class="stream" style="margin-top:10px">${esc(S.aiStream.slice(-600))}</div>`:""}`:""}
     ${S.aiErr?`<div class="notice err" style="margin-top:12px">${icon(IC.warn)}<div>${esc(S.aiErr)}</div></div>`:""}
     ${cta()?`<div style="margin-top:12px">${cta()}</div>`:""}
   </div>`;
@@ -4254,9 +4348,12 @@ async function runAI(){
   if (S.aiBusy || !S.local) return;
   if (!S.sample){ S.aiErr = S.sampleChecked ? "Tinjauan Claude tidak tersedia di tampilan ini. Buka halaman ini di claude.ai atau aplikasi Claude." : "Menghubungkan ke Claude… coba lagi sebentar."; go("ai"); return; }
   const art = isArt();
-  const units = S.local.babs.map(b=>b.bab).join(", ");
+  const allUnits = unitsForRevision(); const sel = aiSel(); if (!sel.length){ S.aiErr="Pilih minimal satu bab untuk ditinjau."; return render(); }
+  const groups = S.aiPerBab && sel.length>1 ? sel.map(u=>[u]) : [sel];
   const guide = art ? RULES_ART : `STRUKTUR WAJIB:\n${GUIDE[S.jenis][S.tahap].map(([b,t,s])=>`${b} ${t}: ${s.join("; ")||"(tanpa sub-bab)"}`).join("\n")}\n\nATURAN PEDOMAN 2025:\n${RULES_KTI}`;
-  const prompt = `Anda adalah ${art?"reviewer jurnal ilmiah":"dosen pembimbing karya tulis ilmiah"} yang teliti di perguruan tinggi Indonesia. Tinjau ${art?`artikel jurnal (penelitian ${S.jenis})`:`naskah ${S.jenis} tahap ${S.tahap}`} berikut. Naskah sudah dibagi per ${art?"bagian":"bab"} dengan penanda "===== NAMA =====".
+  const mkPrompt = G => { const units = G.join(", "); return `${G.length<allUnits.length?`CAKUPAN TINJAUAN: hanya ${units}. Berikan temuan, nilai per bab, dan ringkasan HANYA untuk cakupan ini.
+
+`:""}Anda adalah ${art?"reviewer jurnal ilmiah":"dosen pembimbing karya tulis ilmiah"} yang teliti di perguruan tinggi Indonesia. Tinjau ${art?`artikel jurnal (penelitian ${S.jenis})`:`naskah ${S.jenis} tahap ${S.tahap}`} berikut. Naskah sudah dibagi per ${art?"bagian":"bab"} dengan penanda "===== NAMA =====".
 
 ${guide}
 
@@ -4268,7 +4365,8 @@ Jangan ulangi temuan jenis itu. Fokus pada yang hanya bisa dinilai pembaca manus
 4. klaim tanpa rujukan, istilah yang tidak konsisten antar${art?"bagian":"bab"}.
 
 ATURAN KETAT:
-- "kutipan" WAJIB disalin PERSIS kata demi kata dari naskah (maksimal 20 kata) agar dapat dicocokkan otomatis. Jika temuan bersifat umum, isi dengan string kosong.
+${SCOPE_RULE}
+- Jika temuan berlaku untuk satu bab utuh, pakai cakupan "bagian" dan kosongkan kutipan.
 - "bab" diisi persis salah satu dari: ${units}.
 - Jangan mengarang isi yang tidak ada di naskah. Bahasa Indonesia baku, ringkas, konstruktif; "saran" berisi contoh perbaikan konkret.
 - Maksimal ${S.aiMode==="teliti"?32:14} temuan, sebarkan ke semua ${art?"bagian":"bab"}, urutkan dari yang paling penting.
@@ -4280,22 +4378,24 @@ Balas HANYA dengan satu objek JSON:
  "prioritas": ["3-5 langkah revisi paling berdampak"],
  "per_bab": [{"bab":"...","nilai":0-100,"catatan":"1-2 kalimat tentang kualitas isi bagian ini"}],
  "konsistensi": [{"aspek":"Judul ↔ Rumusan Masalah","status":"sesuai|kurang|tidak","catatan":"..."}, {"aspek":"Rumusan Masalah ↔ Tujuan",...}, {"aspek":"Tujuan ↔ Metode",...}, {"aspek":"Latar Belakang ↔ Rumusan Masalah",...}, {"aspek":"Tujuan ↔ Simpulan",...}],
- "temuan": [{"bab":"...","kategori":"typo|ejaan|kalimat|substansi|metodologi|rujukan","tingkat":"error|warning|info","judul":"...","kutipan":"...","penjelasan":"...","saran":"..."}]}
+ "temuan": [{"bab":"...","kategori":"typo|ejaan|kalimat|substansi|metodologi|rujukan","tingkat":"error|warning|info","judul":"...","cakupan":"kalimat","kutipan":"...","kutipan_akhir":"","penjelasan":"...","saran":"..."}]}
 
 NASKAH:
 """
-${docForAI()}
-"""`;
+${G.length<allUnits.length?docForAIUnits(G):docForAI()}
+"""`; };
   S.aiBusy=true; S.aiErr=""; S.aiStream=""; S.aiCtl=new AbortController();
   render();
   let last=0;
   try{
-    const r = await S.sample.json(prompt, {signal:S.aiCtl.signal, modelTier:S.aiMode==="teliti"?"complex":"default", cache:false, onText:({text})=>{ S.aiStream=text; if(Date.now()-last>500 && (S.view==="ai"||S.view==="overview")){ last=Date.now(); render(); } }});
+    const results=[]; for (let gi=0; gi<groups.length; gi++){ S.aiStep = groups.length>1 ? `${groups[gi].join(", ")} (${gi+1} dari ${groups.length})` : (sel.length<allUnits.length?sel.join(", "):""); S.aiStream=""; render();
+      results.push(await S.sample.json(mkPrompt(groups[gi]), {signal:S.aiCtl.signal, modelTier:S.aiMode==="teliti"?"complex":"default", cache:false, onText:({text})=>{ S.aiStream=text; if(Date.now()-last>500 && (S.view==="ai"||S.view==="overview")){ last=Date.now(); render(); } }})); }
+    const r = mergeAIResults(results, groups); S.aiStep="";
     const arr = v => Array.isArray(v)?v:[];
     const findings = arr(r.temuan).map((t,i)=>{
       const sev = ["error","warning","info"].includes(t.tingkat)?t.tingkat:"warning";
-      const v = verifyQuote(String(t.kutipan||""));
-      return {id:"A"+i, ai:true, cat:"ai", kat:String(t.kategori||"lainnya").toLowerCase(), sev, title:String(t.judul||"Temuan"), detail:String(t.penjelasan||""), fix:String(t.saran||""), quote:v.q||String(t.kutipan||""), p:v.p, verified:v.ok, babAI:String(t.bab||""), occ:v.p!=null&&v.q?[{p:v.p,q:v.q}]:[]};
+      const v = verifyQuote(String(t.kutipan||"")); const sc = normScope(t.cakupan||(t.kutipan?"frasa":"bagian")); const v2 = t.kutipan_akhir ? verifyQuote(String(t.kutipan_akhir)) : {};
+      return {id:"CL"+i, scope:sc, p2:v2.p, quoteEnd:String(t.kutipan_akhir||""), ai:true, cat:"ai", kat:String(t.kategori||"lainnya").toLowerCase(), sev, title:String(t.judul||"Temuan"), detail:String(t.penjelasan||""), fix:String(t.saran||""), quote:v.q||String(t.kutipan||""), p:v.p, verified:v.ok, babAI:String(t.bab||""), occ:v.p!=null&&v.q?[{p:v.p,q:v.q}]:[]};
     });
     S.ai = {skor:Math.max(0,Math.min(100,Math.round(+r.skor||0))), ringkasan:String(r.ringkasan||""), kekuatan:arr(r.kekuatan).map(String), prioritas:arr(r.prioritas).map(String), perBab:arr(r.per_bab).map(x=>({bab:String(x.bab||""),nilai:Math.max(0,Math.min(100,Math.round(+x.nilai||0))),catatan:String(x.catatan||"")})), konsistensi:arr(r.konsistensi).map(c=>({aspek:String(c.aspek||""),status:String(c.status||"").toLowerCase(),catatan:String(c.catatan||"")})), findings};
     toast("Tinjauan Claude selesai.");
@@ -4376,6 +4476,7 @@ document.addEventListener("click", e=>{
   if (b.dataset.cmpclear){ const C=cmpState(); delete C.docs[b.dataset.cmpclear]; C.res=null; C.act=null; return render(); }
   if (b.dataset.simn){ simState().n=+b.dataset.simn; return render(); }
   if (b.dataset.simrefdel!=null){ simState().refs.splice(+b.dataset.simrefdel,1); return render(); }
+  if (b.dataset.aiunitall!=null){ S.aiUnits = b.dataset.aiunitall==="1" ? null : []; return render(); }
   if (b.dataset.revtone){ S.revTone=b.dataset.revtone; return render(); }
   if (b.dataset.revsecall!=null){ S.revSecSel = b.dataset.revsecall==="1" ? [...REV_SECTIONS] : []; return render(); }
   if (b.dataset.inclall){ const [sc,v]=b.dataset.inclall.split("|"); scopeItems(sc).forEach(f=>setIncl(fid(f), v==="1")); return render(); }
@@ -4436,7 +4537,7 @@ document.addEventListener("click", e=>{ if (e.target && (e.target.id==="fileIn2"
 document.addEventListener("submit", e=>{ if(e.target.id==="chatForm"){ e.preventDefault(); const t=$("#chatIn"); const q=t.value; t.value=""; sendChat(q); } });
 document.addEventListener("keydown", e=>{ if(e.key==="Escape" && S.menuOpen) closeMenu(); });
 document.addEventListener("keydown", e=>{ if(e.target.id==="chatIn" && e.key==="Enter" && !e.shiftKey){ e.preventDefault(); $("#chatForm").requestSubmit(); } });
-document.addEventListener("change", e=>{ if(e.target.id==="fileIn2"||e.target.id==="fileIn"){ handleFile(e.target.files[0]); e.target.value=""; } if(e.target.id==="withAI") S.withAI=e.target.checked; if(e.target.id==="useScite") S.useScite=e.target.checked; if(e.target.dataset && e.target.dataset.cemeta){ const C=ceState(); C.meta[e.target.dataset.cemeta]=e.target.value.trim(); if (C.E && C.E.autoCite) C.E.cara_mengutip=autoCite(C.E); render(); } if(e.target.dataset && e.target.dataset.revsec!=null){ const cur=revSecs().slice(); const s=e.target.dataset.revsec; S.revSecSel = e.target.checked ? REV_SECTIONS.filter(x=>cur.includes(x)||x===s) : cur.filter(x=>x!==s); if (!S.revSecSel.length) S.revSecSel=[]; render(); } if(e.target.dataset && e.target.dataset.withapx){ S.withAppendix=e.target.checked; render(); } if(e.target.id==="revNote"){ S.revNote=e.target.value; } if(e.target.dataset && e.target.dataset.revnoter){ (S.revNoteR=S.revNoteR||{})[e.target.dataset.revnoter]=e.target.value; } if(e.target.id==="revNoDup"){ S.revNoDup=e.target.checked; } if(e.target.dataset && e.target.dataset.incl!=null){ setIncl(e.target.dataset.incl, e.target.checked); render(); } if(e.target.dataset && e.target.dataset.cmpslot){ const k=e.target.dataset.cmpslot, f=e.target.files[0]; e.target.value=""; if (f){ const C=cmpState(); C.busy="Membaca "+(f.name||"berkas")+"…"; C.err=""; render(); readAnyDoc(f).then(d=>{ C.docs[k]=d; C.res=null; C.act=null; }).catch(err=>{ C.err=(k==="awal"?"Naskah awal":k==="akhir"?"Naskah revisi":"Dokumen review")+": "+(err.message||err); }).finally(()=>{ C.busy=""; render(); }); } } if(e.target.id==="simRef"){ const f=e.target.files[0]; e.target.value=""; if (f) readAnyDoc(f).then(d=>{ simState().refs.push({name:d.name, text:d.paras.map(p=>p.text).join(" ")}); render(); }).catch(err=>toast("Pembanding tidak terbaca: "+(err.message||err))); } if(e.target.id==="tplIn"){ useTemplateFile(e.target.files[0]); e.target.value=""; } if(e.target.dataset && e.target.dataset.revname!=null){ revNames()[e.target.dataset.revname]=e.target.value.trim(); saveRevNames(); render(); } if(e.target.dataset && e.target.dataset.cmtopt){ cmtOpt()[e.target.dataset.cmtopt]=e.target.checked; render(); } if(e.target.dataset && e.target.dataset.srcdb){ srcOpt()[e.target.dataset.srcdb]=e.target.checked; render(); } if(e.target.dataset && e.target.dataset.adm){ admState()[e.target.dataset.adm]=e.target.value.trim(); render(); } if(e.target.id==="jrUrl"){ S.jr.url=e.target.value.trim(); saveJR(); render(); } if(e.target.id==="jrInfo"){ S.jr.info=e.target.value; saveJR(); } if(e.target.dataset && e.target.dataset.done!=null){ S.revDone[e.target.dataset.done]=e.target.checked; saveDone(); render(); } });
+document.addEventListener("change", e=>{ if(e.target.id==="fileIn2"||e.target.id==="fileIn"){ handleFile(e.target.files[0]); e.target.value=""; } if(e.target.id==="withAI") S.withAI=e.target.checked; if(e.target.id==="useScite") S.useScite=e.target.checked; if(e.target.dataset && e.target.dataset.cemeta){ const C=ceState(); C.meta[e.target.dataset.cemeta]=e.target.value.trim(); if (C.E && C.E.autoCite) C.E.cara_mengutip=autoCite(C.E); render(); } if(e.target.dataset && e.target.dataset.revsec!=null){ const cur=revSecs().slice(); const s=e.target.dataset.revsec; S.revSecSel = e.target.checked ? REV_SECTIONS.filter(x=>cur.includes(x)||x===s) : cur.filter(x=>x!==s); if (!S.revSecSel.length) S.revSecSel=[]; render(); } if(e.target.dataset && e.target.dataset.withapx){ S.withAppendix=e.target.checked; render(); } if(e.target.dataset && e.target.dataset.aiunit!=null){ const cur=aiSel(); const u=e.target.dataset.aiunit; const all=unitsForRevision(); const next = e.target.checked ? all.filter(x=>cur.includes(x)||x===u) : cur.filter(x=>x!==u); S.aiUnits = next.length===all.length ? null : next; render(); } if(e.target.id==="aiPerBab"){ S.aiPerBab=e.target.checked; } if(e.target.id==="revNote"){ S.revNote=e.target.value; } if(e.target.dataset && e.target.dataset.revnoter){ (S.revNoteR=S.revNoteR||{})[e.target.dataset.revnoter]=e.target.value; } if(e.target.id==="revNoDup"){ S.revNoDup=e.target.checked; } if(e.target.dataset && e.target.dataset.incl!=null){ setIncl(e.target.dataset.incl, e.target.checked); render(); } if(e.target.dataset && e.target.dataset.cmpslot){ const k=e.target.dataset.cmpslot, f=e.target.files[0]; e.target.value=""; if (f){ const C=cmpState(); C.busy="Membaca "+(f.name||"berkas")+"…"; C.err=""; render(); readAnyDoc(f).then(d=>{ C.docs[k]=d; C.res=null; C.act=null; }).catch(err=>{ C.err=(k==="awal"?"Naskah awal":k==="akhir"?"Naskah revisi":"Dokumen review")+": "+(err.message||err); }).finally(()=>{ C.busy=""; render(); }); } } if(e.target.id==="simRef"){ const f=e.target.files[0]; e.target.value=""; if (f) readAnyDoc(f).then(d=>{ simState().refs.push({name:d.name, text:d.paras.map(p=>p.text).join(" ")}); render(); }).catch(err=>toast("Pembanding tidak terbaca: "+(err.message||err))); } if(e.target.id==="tplIn"){ useTemplateFile(e.target.files[0]); e.target.value=""; } if(e.target.dataset && e.target.dataset.revname!=null){ revNames()[e.target.dataset.revname]=e.target.value.trim(); saveRevNames(); render(); } if(e.target.dataset && e.target.dataset.cmtopt){ cmtOpt()[e.target.dataset.cmtopt]=e.target.checked; render(); } if(e.target.dataset && e.target.dataset.srcdb){ srcOpt()[e.target.dataset.srcdb]=e.target.checked; render(); } if(e.target.dataset && e.target.dataset.adm){ admState()[e.target.dataset.adm]=e.target.value.trim(); render(); } if(e.target.id==="jrUrl"){ S.jr.url=e.target.value.trim(); saveJR(); render(); } if(e.target.id==="jrInfo"){ S.jr.info=e.target.value; saveJR(); } if(e.target.dataset && e.target.dataset.done!=null){ S.revDone[e.target.dataset.done]=e.target.checked; saveDone(); render(); } });
 document.addEventListener("dragover", e=>{ const d=e.target.closest&&e.target.closest("#drop"); if(d){ e.preventDefault(); d.classList.add("over"); } });
 document.addEventListener("dragleave", e=>{ const d=e.target.closest&&e.target.closest("#drop"); if(d) d.classList.remove("over"); });
 document.addEventListener("drop", e=>{ const d=e.target.closest&&e.target.closest("#drop"); if(d){ e.preventDefault(); d.classList.remove("over"); handleFile(e.dataTransfer.files[0]); } });
