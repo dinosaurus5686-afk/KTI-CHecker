@@ -290,6 +290,17 @@ details.how td{text-align:left}
 .btn.warn{color:var(--err)}
 .btn.warn.armed{background:var(--err);color:#fff;border-color:transparent}
 .nav button[disabled]{opacity:.35;cursor:not-allowed}
+.norgrp{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end}
+.norlbl{font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 4px 2px}
+.nortabs{display:flex;flex-wrap:wrap;gap:2px}
+.nortab{border:1px solid transparent;border-bottom:0;background:transparent;padding:9px 14px;border-radius:10px 10px 0 0;font-weight:700;font-size:13px;color:var(--accent)}
+.nortab[aria-current="page"]{background:var(--surface-2);border-color:var(--line);color:var(--fg);box-shadow:inset 0 3px 0 var(--accent)}
+.norsub{display:flex;flex-wrap:wrap;gap:6px;margin:0 -18px;padding:10px 18px 12px;background:var(--surface-2);border-top:1px solid var(--line);border-radius:0 0 14px 14px}
+.norsub button{border:1px solid var(--line);background:var(--surface);padding:6px 11px;border-radius:9px;font-size:12.5px;font-weight:600;color:var(--fg)}
+.norsub button[aria-current="page"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.norsub button[disabled]{opacity:.4;cursor:not-allowed}
+.norlist{list-style:none;margin:0;padding:0}.norlist li{display:flex;gap:10px;padding:7px 0;border-top:1px solid var(--line);font-size:13px;line-height:1.5}.norlist li:first-child{border-top:0}.norlist li>span:first-child{width:16px;flex:none;text-align:center}
+.nortbl{width:100%;margin-top:12px;border-collapse:collapse;font-size:13px}.nortbl th,.nortbl td{padding:7px 8px;border-top:1px solid var(--line)}.nortbl th{font-size:11.5px;color:var(--muted);text-align:center}
 .stage{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:16px}
 .steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
 .steps li{display:flex;gap:10px;align-items:center;font-size:13px;color:var(--muted)}
@@ -564,23 +575,13 @@ const NAV = [
   ["sitasi","Sitasi & Pustaka","M7 8h3v5H6V9a4 4 0 0 1 3-4M15 8h3v5h-4V9a4 4 0 0 1 3-4M5 19h14"],
   ["visual","Tabel & Gambar","M4 5h16v14H4zM4 10h16M10 10v9"],
   ["format","Format Dokumen","M6 3h12v18H6zM9 7h6M9 11h6M9 15h3"],
-  ["template","Kesesuaian Template","M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM14 17l2 2 4-4"],
-  ["grammar","Cek Grammar","M4 18 9 6l5 12M6 14h6M15 13l2 2 4-5"],
-  ["similarity","Cek Similarity","M9 9h10v10H9zM5 5h10v2M5 5v10h2"],
-  ["aicheck","Cek Penggunaan AI","M12 3v3M12 18v3M3 12h3M18 12h3M7 7h10v10H7zM10 10h4v4h-4z"],
-  ["sep"],
-  ["ai","Tinjauan Claude","M12 3l1.9 5.6 5.6 1.9-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9L12 3Z"],
-  ["revisi","Revisi Naskah","M4 20h4L19 9l-4-4L4 16v4Zm11-15 4 4"],
-  ["banding","Bandingkan Revisi","M8 3v18M16 3v18M3 8h5M3 16h5M16 8h5M16 16h5"],
-  ["copyedit","Copyediting","M4 4h16v16H4zM8 8h8M8 12h8M8 16h5M15 15l2 2 3-4"],
-  ["admin","LOA & Invoice","M6 3h9l4 4v14H6V3Zm9 0v4h4M9 12h7M9 16h7M9 8h3"],
-  ["ojs","Siap Publish (OJS)","M4 4h16v12H4zM8 20h8M12 16v4M8 9l3 3 5-5"],
+  ["nor","Publikasi NOR","M3 7l9-4 9 4-9 4-9-4ZM3 12l9 4 9-4M3 17l9 4 9-4"],
   ["chat","Tanya Pembimbing","M4 5h16v11H9l-5 4V5Zm4 5h8M8 8h5"],
   ["unggah","Unggah Naskah","M12 16V4m0 0-4 4m4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"]
 ];
 function viewMeta(v){
   const a=isArt();
-  return ({overview:["Ringkasan",a?"Kepatuhan artikel terhadap template Nusantara of Research":"Kepatuhan naskah terhadap pedoman"],perbab:[a?"Per Bagian":"Per Bab",a?"Statistik dan temuan setiap bagian artikel":"Statistik dan temuan setiap bab"],naskah:["Naskah","Temuan ditandai langsung pada teks"],struktur:[a?"Struktur Artikel":"Struktur Bab",a?"Urutan dan format judul bagian":"Kelengkapan dan urutan sub-bab wajib"],isi:[a?"Isi per Bagian":"Isi per Bab",a?"Ketentuan isi setiap bagian artikel":"Pemeriksaan isi khas setiap bab"],abstrak:[a?"Judul & Abstrak":"Abstrak",a?"Judul, penulis, ABSTRACT, ABSTRAK, kata kunci":"Panjang, unsur, dan kata kunci"],bahasa:["Ejaan & Diksi","Typo, tanda baca, dan istilah · bahasa Indonesia dan Inggris"],sitasi:["Sitasi & Pustaka",a?"APA edisi 7: kutipan dalam teks dan daftar rujukan":"Format APA dan kecocokan rujukan"],visual:["Tabel & Gambar","Letak, perataan, dan penomoran keterangan"],format:["Format Dokumen",a?"Huruf Arial Narrow, ukuran, perataan":"Kertas, margin, huruf, dan spasi"],ai:a?["Review Reviewer","Simulasi 1–3 reviewer dan editor jurnal"]:["Tinjauan Claude","Substansi, konsistensi, dan typo"],revisi:["Revisi Naskah","Perbaikan per bagian berdasarkan semua temuan"],copyedit:["Copyediting","Kemas ulang artikel sesuai template jurnal"],template:["Kesesuaian Template","Dibandingkan dengan template resmi Nusantara of Research"],banding:["Bandingkan Revisi","Perbedaan redaksi dan aktivitas revisi: naskah awal, saran, dan naskah revisi"],grammar:["Cek Grammar","Tata bahasa Indonesia dan Inggris"],similarity:["Cek Similarity","Kemiripan dengan literatur terindeks (indikatif)"],aicheck:["Cek Penggunaan AI","Indikasi teks buatan AI (indikatif)"],admin:["LOA & Invoice","Surat penerimaan dan tagihan dari data artikel"],ojs:["Siap Publish (OJS)","Metadata artikel siap salin-tempel ke OJS"],chat:["Tanya Pembimbing","Diskusikan naskah Anda dengan Claude"],unggah:["Unggah Naskah","Unggah .docx, .pdf, .txt atau tempel teks"]})[v];
+  return ({overview:["Ringkasan",a?"Kepatuhan artikel terhadap template Nusantara of Research":"Kepatuhan naskah terhadap pedoman"],perbab:[a?"Per Bagian":"Per Bab",a?"Statistik dan temuan setiap bagian artikel":"Statistik dan temuan setiap bab"],naskah:["Naskah","Temuan ditandai langsung pada teks"],struktur:[a?"Struktur Artikel":"Struktur Bab",a?"Urutan dan format judul bagian":"Kelengkapan dan urutan sub-bab wajib"],isi:[a?"Isi per Bagian":"Isi per Bab",a?"Ketentuan isi setiap bagian artikel":"Pemeriksaan isi khas setiap bab"],abstrak:[a?"Judul & Abstrak":"Abstrak",a?"Judul, penulis, ABSTRACT, ABSTRAK, kata kunci":"Panjang, unsur, dan kata kunci"],bahasa:["Ejaan & Diksi","Typo, tanda baca, dan istilah · bahasa Indonesia dan Inggris"],sitasi:["Sitasi & Pustaka",a?"APA edisi 7: kutipan dalam teks dan daftar rujukan":"Format APA dan kecocokan rujukan"],visual:["Tabel & Gambar","Letak, perataan, dan penomoran keterangan"],format:["Format Dokumen",a?"Huruf Arial Narrow, ukuran, perataan":"Kertas, margin, huruf, dan spasi"],ai:a?["Review Reviewer","Simulasi 1–3 reviewer dan editor jurnal"]:["Tinjauan Claude","Substansi, konsistensi, dan typo"],revisi:["Revisi Naskah","Perbaikan per bagian berdasarkan semua temuan"],copyedit:["Copyediting","Kemas ulang artikel sesuai template jurnal"],template:["Kesesuaian Template","Dibandingkan dengan template resmi Nusantara of Research"],banding:["Bandingkan Revisi","Perbedaan redaksi dan aktivitas revisi: naskah awal, saran, dan naskah revisi"],grammar:["Cek Grammar","Tata bahasa Indonesia dan Inggris"],similarity:["Cek Similarity","Kemiripan dengan literatur terindeks (indikatif)"],aicheck:["Cek Penggunaan AI","Indikasi teks buatan AI (indikatif)"],nor:["Publikasi NOR","Alur OJS: Workflow (Submission, Review, Copyediting, Production) dan Publication"],admin:["LOA & Invoice","Surat penerimaan dan tagihan dari data artikel"],ojs:["Siap Publish (OJS)","Metadata artikel siap salin-tempel ke OJS"],chat:["Tanya Pembimbing","Diskusikan naskah Anda dengan Claude"],unggah:["Unggah Naskah","Unggah .docx, .pdf, .txt atau tempel teks"]})[v];
 }
 const CAT = {struktur:"Struktur",isi:"Isi per Bab",abstrak:"Abstrak",bahasa:"Ejaan & Diksi",sitasi:"Sitasi & Pustaka",visual:"Tabel & Gambar",format:"Format"};
 const catLabel = c => isArt() ? ({struktur:"Struktur",isi:"Isi per Bagian",abstrak:"Judul & Abstrak"}[c]||CAT[c]) : CAT[c];
@@ -4114,6 +4115,106 @@ function vOJSWizard(){
     <details style="margin-top:12px"><summary class="small" style="cursor:pointer">Lihat semua langkah</summary><ol class="small" style="margin:8px 0 0 18px;padding:0;line-height:1.8">${st.map((x,k)=>`<li><button class="linkish" data-wizgo="${k}">${W.done[x.key]?"✓ ":""}${esc(x.tab)}${x.lang?` (${esc(x.lang)})`:""}${x.author?` · penulis ${x.author}`:""} → ${esc(x.field)}</button></li>`).join("")}</ol></details></div>`;
 }
 
+/* ═════════════ PUBLIKASI NOR: MENU BESAR MENGIKUTI ALUR OJS ═════════════ */
+const NOR_STAGES = [
+  {id:"submission", grp:"Workflow", label:"Submission", sub:"Pemeriksaan awal sebelum review (Pre-Review)", tools:["template","grammar","similarity","aicheck"]},
+  {id:"review", grp:"Workflow", label:"Review", sub:"Review reviewer, revisi penulis, dan invoice deposit", tools:["ai","revisi","banding","admin"]},
+  {id:"copyediting", grp:"Workflow", label:"Copyediting", sub:"Penyuntingan naskah ke template Nusantara of Research", tools:["copyedit"]},
+  {id:"production", grp:"Workflow", label:"Production", sub:"LOA, invoice akhir, dan berkas siap terbit", tools:["admin"]},
+  {id:"publication", grp:"Publication", label:"Publication", sub:"Metadata publikasi siap salin-tempel", tools:["ojs"]}
+];
+const NOR_TOOLS = new Set(NOR_STAGES.flatMap(s=>s.tools));
+const NOR_TOOL_LABEL = {template:"Kesesuaian Template", grammar:"Cek Grammar", similarity:"Cek Similarity", aicheck:"Cek Penggunaan AI", ai:"Review Reviewer", revisi:"Revisi Naskah", banding:"Bandingkan Revisi", copyedit:"Copyediting", admin:"LOA & Invoice", ojs:"Siap Publish (OJS)"};
+const isNorView = v => v==="nor" || NOR_TOOLS.has(v);
+function norStage(){
+  const cur = NOR_STAGES.find(s=>s.id===S.norStage);
+  if (S.view!=="nor" && (!cur || !cur.tools.includes(S.view))){ const s=NOR_STAGES.find(x=>x.tools.includes(S.view)); if (s) S.norStage=s.id; }
+  return NOR_STAGES.find(s=>s.id===S.norStage) || NOR_STAGES[0];
+}
+// status naskah aktif per tahap: [selesai?, teks]
+function norStatus(id){
+  const A=admState(); const L=S.local; const st=[];
+  const t=(ok,txt,v)=>st.push({ok,txt,v});
+  if (id==="submission"){
+    let e=null; try{ e = L&&isArt() ? templateChecklist().filter(x=>x.sev==="error").length : null; }catch(_){}
+    t(e===0, e==null?"Kesesuaian template belum diperiksa":e?`Kesesuaian template: ${e} butir belum sesuai`:"Sesuai template Nusantara of Research", "template");
+    t(!!(S.gram&&S.gram.items), S.gram&&S.gram.items?`Cek grammar selesai (${S.gram.items.length} catatan)`:"Cek grammar belum dijalankan", "grammar");
+    t(!!(S.sim&&S.sim.rows), S.sim&&S.sim.rows?"Cek similarity selesai":"Cek similarity belum dijalankan", "similarity");
+    t(!!(S.aicheck&&S.aicheck.rows), S.aicheck&&S.aicheck.rows?"Cek penggunaan AI selesai":"Cek penggunaan AI belum dijalankan", "aicheck");
+  } else if (id==="review"){
+    t(!!S.ai, S.ai?`Review reviewer selesai (skor ${S.ai.skor})`:"Review reviewer belum dijalankan", "ai");
+    t(!!(S.rev&&S.rev.done)||!!(S.inst&&S.inst.done), S.inst&&S.inst.done?"Revisi instan selesai":S.rev&&S.rev.done?"Revisi naskah selesai":"Belum ada revisi naskah", "revisi");
+    t(!!(S.cmp&&S.cmp.res), S.cmp&&S.cmp.res?"Perbandingan revisi selesai":"Revisi penulis belum dibandingkan", "banding");
+    t(!!A.filled, A.filled?`Invoice deposit siap (paket ${(PAKET[A.paket]||{}).label||A.paket})`:"Invoice deposit belum disiapkan", "admin");
+  } else if (id==="copyediting"){
+    t(!!(S.ce&&S.ce.E), S.ce&&S.ce.E?"Naskah sudah di-copyedit ke template":"Copyediting belum dijalankan", "copyedit");
+  } else if (id==="production"){
+    t(!!(A.vol&&A.no&&A.reg), A.vol&&A.no&&A.reg?`LOA: Vol. ${A.vol} No. ${A.no}, register ${A.reg}`:"Volume, nomor, dan nomor register LOA belum diisi", "admin");
+    t(!!A.paid, A.paid?"Invoice akhir sudah lunas (cap PAID)":"Invoice akhir belum ditandai lunas", "admin");
+  } else if (id==="publication"){
+    let kosong=null; try{ if (S.doc){ const {F}=ojsData(); kosong=F.filter(f=>["title_id","title_en","abstract_id","abstract_en","kw_id","kw_en","refs","doi","issue","pages"].includes(f.key) && !String(f.val).trim()).map(f=>f.label); } }catch(_){}
+    t(kosong&&!kosong.length, kosong==null?"Unggah naskah untuk menyusun metadata":kosong.length?`Metadata belum lengkap: ${kosong.join(", ")}`:"Metadata publikasi lengkap", "ojs");
+  }
+  return st;
+}
+// analisis kebutuhan: apa yang sudah ditangani aplikasi untuk tiap tahap OJS
+const NOR_NEEDS = {
+  submission:{ojs:"Submission Files · Pre-Review Discussions · keputusan Send to Review / Decline Submission", items:[
+    [2,"Cek kesesuaian template NOR, grammar (ID/EN), similarity, dan penggunaan AI","template"],
+    [1,"Similarity membandingkan dengan sumber yang ditemukan Claude, bukan basis data Turnitin/iThenticate. Untuk keputusan resmi tetap pakai layanan similarity jurnal.","similarity"],
+    [0,"Teks keputusan awal (Send to Review / Decline Submission) dan pesan Pre-Review Discussion untuk penulis"]]},
+  review:{ojs:"Review Rounds · Reviewer · Review Files · Revisions · Record Editorial Decision", items:[
+    [2,"Review 1–3 reviewer dengan instruksi custom, laporan .docx/.pdf, dan naskah berkomentar balon per reviewer (siap unggah sebagai lampiran review)","ai"],
+    [2,"Revisi Naskah (dengan [LENGKAPI]) dan Revisi Instan","revisi"],
+    [2,"Bandingkan naskah awal, saran review, dan revisi penulis untuk round berikutnya","banding"],
+    [2,"Invoice deposit setelah review awal","admin"],
+    [0,"Teks keputusan editor (Request Revisions / Resubmit for Review / Accept Submission / Decline) siap tempel ke e-mail OJS"],
+    [0,"Riwayat round review per naskah: data hilang ketika naskah diganti atau halaman dimuat ulang"]]},
+  copyediting:{ojs:"Draft Files · Copyediting Discussions · Copyedited", items:[
+    [2,"Copyediting otomatis ke template NOR (.docx) untuk diunggah ke Copyedited","copyedit"],
+    [0,"Pesan Copyediting Discussion untuk konfirmasi penulis dan penamaan berkas copyedited yang seragam"]]},
+  production:{ojs:"Production Ready Files · Production Discussions · Galleys", items:[
+    [2,"LOA dengan nomor, volume, register, tanggal tanda tangan, dan barcode DOI","admin"],
+    [2,"Invoice akhir dengan cap PAID / LUNAS","admin"],
+    [1,"Berkas siap terbit masih .docx; galley PDF dibuat sendiri dari Word (Save as PDF)","copyedit"],
+    [0,"Galley PDF final otomatis (header jurnal, Vol/No, DOI, rentang halaman, cara mengutip)"]]},
+  publication:{ojs:"Title & Abstract · Contributors · Metadata · References · Identifiers · Issue · Permissions & Disclosure · Galleys", items:[
+    [2,"Semua kolom Publication diekstrak, judul/abstrak/kata kunci diterjemahkan otomatis ke bahasa kedua","ojs"],
+    [2,"Panduan tempel langkah demi langkah (bisa di HP) dan bookmark pengisi otomatis","ojs"],
+    [1,"Unggah berkas galley, pilih issue, dan Schedule For Publication tetap dilakukan manual di OJS","ojs"],
+    [0,"Pengelolaan satu issue penuh (daftar isi, urutan artikel, rentang halaman berurutan); aplikasi memproses satu naskah sekaligus"]]}
+};
+const NOR_MARK = [["✗","Belum ada","var(--bad,#c62828)"],["◐","Sebagian","var(--warn,#c77700)"],["✓","Tersedia","var(--ok,#1b873f)"]];
+function vNorBar(){
+  const sg=norStage(); const grp=g=>NOR_STAGES.filter(s=>s.grp===g);
+  const tabBtn = s => `<button class="nortab" data-norstage="${s.id}" ${s.id===sg.id?'aria-current="page"':""}>${esc(s.label)}</button>`;
+  const dis = v => !S.doc && !["admin","banding"].includes(v);
+  return `<div class="card norbar" style="margin-bottom:16px;padding-bottom:0">
+    <div class="norgrp"><div><div class="norlbl">Workflow</div><div class="nortabs">${grp("Workflow").map(tabBtn).join("")}</div></div>
+      <div><div class="norlbl">Publication</div><div class="nortabs">${grp("Publication").map(tabBtn).join("")}</div></div></div>
+    <div class="norsub"><button data-view="nor" ${S.view==="nor"?'aria-current="page"':""}>Ringkasan tahap</button>${sg.tools.map(v=>`<button data-view="${v}" ${S.view===v?'aria-current="page"':""} ${dis(v)?"disabled":""}>${esc(NOR_TOOL_LABEL[v])}</button>`).join("")}</div></div>`;
+}
+function vNor(){
+  const sg=norStage(); const N=NOR_NEEDS[sg.id]; const st=norStatus(sg.id);
+  const allNeeds = NOR_STAGES.map(s=>NOR_NEEDS[s.id].items).flat(); const cnt=k=>allNeeds.filter(x=>x[0]===k).length;
+  const link = v => v&&NOR_TOOL_LABEL[v] ? ` <button class="linkish small" data-view="${v}" ${!S.doc&&!["admin","banding"].includes(v)?"disabled":""}>Buka ${esc(NOR_TOOL_LABEL[v])} →</button>` : "";
+  return `<div class="grid" style="gap:16px">
+    <div class="card c6"><h3>Naskah ini · ${esc(sg.label)}<span class="r">${st.filter(x=>x.ok).length}/${st.length} selesai</span></h3>
+      ${!S.doc?`<p class="small muted" style="margin:0 0 8px">Belum ada naskah. Unggah naskah dulu; LOA & Invoice dan Bandingkan Revisi tetap bisa dipakai tanpa naskah.</p>`:""}
+      <ul class="norlist">${st.map(x=>`<li><span style="color:${x.ok?"var(--ok,#1b873f)":"var(--muted)"};font-weight:800">${x.ok?"✓":"○"}</span><span>${esc(x.txt)}${link(x.v)}</span></li>`).join("")}</ul></div>
+    <div class="card c6"><h3>Kebutuhan OJS tahap ${esc(sg.label)}</h3>
+      <p class="small muted" style="margin:0 0 8px">Di OJS: ${esc(N.ojs)}</p>
+      <ul class="norlist">${N.items.map(([k,txt,v])=>`<li><span title="${NOR_MARK[k][1]}" style="color:${NOR_MARK[k][2]};font-weight:800">${NOR_MARK[k][0]}</span><span>${esc(txt)}${k?link(v):""}</span></li>`).join("")}</ul></div>
+    <div class="card c12"><h3>Penilaian keseluruhan: apakah sudah cukup untuk mengelola OJS?<span class="r">${cnt(2)} tersedia · ${cnt(1)} sebagian · ${cnt(0)} belum ada</span></h3>
+      <div class="small" style="line-height:1.65">
+        <p style="margin:0 0 8px"><b>Sudah cukup untuk pekerjaan inti editor:</b> memeriksa naskah masuk, menyiapkan review tiga reviewer, membandingkan revisi, copyediting ke template, LOA, invoice deposit/akhir, dan mengisi tab Publication.</p>
+        <p style="margin:0 0 8px"><b>Belum menutup pekerjaan administrasi workflow:</b> teks keputusan editor untuk setiap tahap (Send to Review, Request Revisions, Accept, Decline), pesan diskusi copyediting/production, galley PDF final, dan riwayat round review per naskah.</p>
+        <p style="margin:0"><b>Di luar jangkauan aplikasi:</b> menugaskan reviewer, mengunggah berkas, dan menekan tombol keputusan di OJS tetap dilakukan di OJS. Aplikasi ini tidak bisa masuk ke akun OJS Anda.</p></div>
+      <table class="nortbl"><thead><tr><th style="text-align:left">Tahap OJS</th><th>Tersedia</th><th>Sebagian</th><th>Belum ada</th></tr></thead><tbody>
+        ${NOR_STAGES.map(s=>{ const it=NOR_NEEDS[s.id].items; return `<tr><td><button class="linkish" data-norstage="${s.id}">${s.grp==="Workflow"?"Workflow → ":""}${esc(s.label)}</button></td>${[2,1,0].map(k=>`<td style="text-align:center;color:${NOR_MARK[k][2]};font-weight:700">${it.filter(x=>x[0]===k).length||"–"}</td>`).join("")}</tr>`; }).join("")}
+      </tbody></table></div></div>`;
+}
+
 /* ═════════════ RUN ═════════════ */
 const WEIGHTS = {struktur:{e:5,w:2,cap:25},isi:{e:3,w:1,cap:15},abstrak:{e:3,w:1.5,cap:12},bahasa:{e:1.5,w:.5,cap:12},sitasi:{e:2,w:1,cap:16},visual:{e:2,w:1,cap:8},format:{e:3,w:1.5,cap:12}};
 const STEPS = ["Membaca susunan bab dan sub-bab","Memeriksa isi setiap bab","Memeriksa abstrak dan kata kunci","Memeriksa ejaan dan diksi","Mencocokkan sitasi dengan daftar pustaka","Memeriksa tabel, gambar, dan format"];
@@ -4442,14 +4543,14 @@ function renderNav(){
   const L=S.local; const art=isArt();
   const badge = c => { if(!L) return ""; if(c==="template"){ if(!art) return ""; const r=templateChecklist(); const e=r.filter(x=>x.sev==="error").length; return `<span class="cnt ${e?"e":""}">${e||"✓"}</span>`; } if(c==="ai") return S.ai?`<span class="cnt">${S.ai.skor}</span>`:S.aiBusy?`<span class="cnt">…</span>`:""; const e=L.by[c]?L.by[c].error:0; return CAT[c]? `<span class="cnt ${e?"e":""}">${e||"✓"}</span>`:""; };
   const label = (id,l) => art ? ({struktur:"Struktur Artikel",isi:"Isi per Bagian",perbab:"Per Bagian",abstrak:"Judul & Abstrak",ai:"Review Reviewer"}[id]||l) : l;
-  $("#nav").innerHTML = NAV.map(n=> n[0]==="sep" ? `<div class="sep"></div>` : `<button data-view="${n[0]}" ${S.view===n[0]?'aria-current="page"':""} ${(!S.doc&&!["unggah","admin","banding"].includes(n[0]))?"disabled":""}>${icon(n[2])}<span>${label(n[0],n[1])}</span>${badge(n[0])}</button>`).join("");
+  $("#nav").innerHTML = NAV.map(n=> n[0]==="sep" ? `<div class="sep"></div>` : `<button data-view="${n[0]}" ${S.view===n[0]||(n[0]==="nor"&&isNorView(S.view))?'aria-current="page"':""} ${(!S.doc&&!["unggah","admin","banding","nor"].includes(n[0]))?"disabled":""}>${icon(n[2])}<span>${label(n[0],n[1])}</span>${badge(n[0])}</button>`).join("");
   $("#railfoot").innerHTML = art ? `<strong>Template Nusantara of Research</strong>Judul, abstrak bilingual, Arial Narrow, enam bagian artikel, dan minimal 15 rujukan.` : `<strong>Pedoman KTI 2025</strong>Pemeriksaan otomatis berjalan di perangkat Anda. Tinjauan Claude memakai akun Claude Anda sendiri.`;
 }
 function render(){
   try{ recalcLocal(); }catch(e){ console.warn(e); }
-  if (!S.doc && !["admin","banding"].includes(S.view)) S.view="unggah";
+  if (!S.doc && !["admin","banding","nor"].includes(S.view)) S.view="unggah";
   renderNav();
-  const needsLocal = !["unggah","chat","admin","banding"].includes(S.view);
+  const needsLocal = !["unggah","chat","admin","banding","nor"].includes(S.view);
   const staging = S.doc && !S.local && needsLocal;
   const [t,sub] = staging ? ["Mulai Analisis","Naskah sudah dimuat"] : viewMeta(S.view);
   $("#vtitle").textContent = t; $("#vsub").textContent = sub;
@@ -4467,8 +4568,8 @@ function render(){
   $("#btnTpl").classList.toggle("primary", S.view==="template"); $("#btnTpl").disabled = !S.local;
   $("#btnReset").disabled = !S.doc && !S.chat.length;
   $("#selJenis").disabled = false;
-  const views = {overview:()=>dlBar("overall")+vOverview(),perbab:vPerBab,naskah:vNaskah,struktur:vStruktur,isi:()=>findingsView("isi"),abstrak:vAbstrak,bahasa:vBahasa,sitasi:vSitasi,visual:()=>findingsView("visual"),format:vFormat,ai:()=>vAI()+(S.ai&&!isArt()&&!S.aiBusy?vReviewDl():""),revisi:vRevisi,copyedit:vCopyedit,template:vTemplate,ojs:vOJS,banding:vBanding,grammar:vGrammar,similarity:vSimilarity,aicheck:vAICheck,admin:vAdmin,chat:vChat,unggah:vUnggah};
-  $("#view").innerHTML = staging ? vStage() : (S.view==="chat" && !S.local ? vStage() : views[S.view]());
+  const views = {overview:()=>dlBar("overall")+vOverview(),perbab:vPerBab,naskah:vNaskah,struktur:vStruktur,isi:()=>findingsView("isi"),abstrak:vAbstrak,bahasa:vBahasa,sitasi:vSitasi,visual:()=>findingsView("visual"),format:vFormat,ai:()=>vAI()+(S.ai&&!isArt()&&!S.aiBusy?vReviewDl():""),revisi:vRevisi,copyedit:vCopyedit,template:vTemplate,ojs:vOJS,nor:vNor,banding:vBanding,grammar:vGrammar,similarity:vSimilarity,aicheck:vAICheck,admin:vAdmin,chat:vChat,unggah:vUnggah};
+  $("#view").innerHTML = (isNorView(S.view)?vNorBar():"") + (staging ? vStage() : (S.view==="chat" && !S.local ? vStage() : views[S.view]()));
   $("#foot").textContent = `${isArt()?"Template artikel jurnal Nusantara of Research":"Pedoman KTI 2025"} · Hasil bersifat pendamping; keputusan akhir tetap pada dosen pembimbing dan editor.`;
   const msgs=$("#msgs"); if(msgs) msgs.scrollTop=msgs.scrollHeight;
 }
@@ -4721,6 +4822,7 @@ async function exportReport(){
 document.addEventListener("click", e=>{
   const b = e.target.closest("button"); if(!b || b.disabled) return;
   if (b.id==="btnReset") return resetAll();
+  if (b.dataset.norstage){ S.norStage=b.dataset.norstage; return go("nor"); }
   if (b.dataset.view) return go(b.dataset.view);
   if (b.dataset.goto!=null) return gotoPara(+b.dataset.goto);
   if (b.dataset.bab){ S.babSel=b.dataset.bab; return go("perbab"); }
