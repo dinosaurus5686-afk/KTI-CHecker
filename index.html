@@ -1757,7 +1757,7 @@ function diffWords(a, b){
 const mdInline = s => esc(s).replace(/\*([^*\n]+)\*/g,"<i>$1</i>");
 const SMALL = new Set(["dan","di","ke","dari","yang","untuk","pada","dengan","of","and","the","in","on","for","to","a","an"]);
 const ACR_COMMON = new Set(["DAN","DI","KE","YANG","THE","OF","AND","IN","ON","FOR","TO","AN","A","DGN","PADA"]);
-const smartTitle = t => { t=String(t||""); if (!isUpperish(t)) return titleCase(t); return t.split(/\s+/).map((w,i)=>{ const core=w.replace(/[^A-Za-z0-9]/g,""); if ((core.length<=3 && core.length>0 && !ACR_COMMON.has(core)) || (core.length>1 && !/[AEIOU]/.test(core))) return w; const lw=w.toLowerCase(); return (i>0 && SMALL.has(lw)) ? lw : lw.charAt(0).toUpperCase()+lw.slice(1); }).join(" "); };
+const smartTitle = t => { t=String(t||""); if (!isUpperish(t)) return titleCase(t); return t.split(/\s+/).map((w,i)=>{ const core=w.replace(/[^A-Za-z0-9]/g,""); if ((core.length<=3 && core.length>0 && !ACR_COMMON.has(core)) || (core.length>1 && !/[AEIOU]/.test(core))) return w; const lw=w.toLowerCase(); return (i>0 && SMALL.has(lw)) ? lw : lw.replace(/^([^A-Za-zÀ-ÿ]*)(.)/,(m,x,y)=>x+y.toUpperCase()); }).join(" "); };
 const titleCase = s => s.split(/\s+/).map((w,i)=> (i>0 && SMALL.has(w.toLowerCase())) ? w.toLowerCase() : (/^[A-Z0-9\-]{2,}$/.test(w) ? w : w.charAt(0).toUpperCase()+w.slice(1))).join(" ");
 const PROPER = /^(Indonesia|Indonesian|Jawa|Java|Kediri|Jakarta|Surabaya|Malang|English|Inggris|Islam|Islamic|Covid|COVID|Asia|Asean|ASEAN|Pancasila|Bekasi|Sumatra|Bali|Papua|Kalimantan|Sulawesi|Google|Facebook|Instagram|TikTok|YouTube|Shopee|Tokopedia)\b/;
 function sentenceCase(t){
@@ -2092,7 +2092,7 @@ function vRevisiBase(){
 /* ═════════════ COPYEDITING → TEMPLATE JURNAL ═════════════ */
 const CE_SECTIONS = ["PENDAHULUAN","METODE","HASIL","PEMBAHASAN","KESIMPULAN DAN SARAN"];
 const CE_JOURNAL = "Jurnal Nusantara of Research";
-function ceState(){ if (!S.ce) S.ce = {src: S.rev && S.rev.done ? "revisi" : "upload", E:null, notes:[], busy:false, prog:"", err:"", meta:{tahun:String(new Date().getFullYear()), vol:"", no:"", hal:""}}; return S.ce; }
+function ceState(){ if (!S.ce) S.ce = {src: S.rev && S.rev.done ? "revisi" : "upload", E:null, notes:[], busy:false, prog:"", err:"", meta:{tahun:(S.adm&&S.adm.tahun)||String(new Date().getFullYear()), vol:(S.adm&&S.adm.vol)||"", no:(S.adm&&S.adm.no)||"", reg:(S.adm&&S.adm.reg)||"", hal:""}}; return S.ce; }
 const splitList = s => String(s||"").split(/[;,]/).map(x=>x.trim().replace(/\.$/,"")).filter(Boolean);
 function sourceParas(src){
   if (src==="instan" && S.inst && S.inst.done) return instantParas().map(p=>({tag:p.tag==="table"||p.tag==="img"||p.tag==="li"?p.tag:(p.isHead||p.isBab?"h":p.tag==="h"?"h":"p"), text:p.text, b:p.b, it:p.it, em:p.em, cells:p.cells, artLvl:p.artLvl, img:p.img}));
@@ -2108,7 +2108,7 @@ function extractArticle(src){
   const meta = front.slice(title?front.indexOf(title)+1:0, ai<0?Math.min(front.length,6):ai);
   meta.forEach(p=>{
     const t=p.text;
-    if (/@/.test(t)) E.email.push(...(t.match(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g)||[]));
+    if (/@/.test(t)){ (E._mail=E._mail||[]).push(t); E.email.push(...(t.match(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g)||[])); }
     else if (/(universitas|institut|sekolah|politeknik|stkip|iain|uin|program studi|fakultas|akademi|university|college|sma|smp|sdn?)\b/i.test(t)) E.institusi.push(t);
     else if (!E.penulis.length && !/^cara\s+mengutip/i.test(t)) E.penulis = stripGelar(t).split(/,|\s+dan\s+|\s&\s/).map(x=>x.trim()).filter(x=>x && !/^(S|M|D)\.\s?\w+\.?$/.test(x));
   });
@@ -2132,13 +2132,8 @@ function extractArticle(src){
     B.push({t:p.tag==="li"?"li":"p", text:p.text});
   });
   E.sections.forEach(s=>s.blocks.forEach(b=>{ if (b.t==="figure" && !b.caption){ /* keterangan dari _cap */ } }));
-  if (!E.cara_mengutip){ E.cara_mengutip = autoCite(E); E.autoCite=true; }
+  normAuthors(E); E.cara_mengutip = autoCite(E); E.autoCite=true;
   return E;
-}
-function autoCite(E){
-  const a = E.penulis[0] || "Nama Penulis"; const parts=a.trim().split(/\s+/); const sur=parts.length>1?parts.pop():parts[0]; const given=parts.join(" ");
-  const m=S.ce?S.ce.meta:{tahun:new Date().getFullYear()};
-  return `${sur}${given?", "+given:""}${E.penulis.length>2?", dkk.":E.penulis.length===2?", & "+E.penulis[1]:""} (${m.tahun||"Tahun"}) ${smartTitle(E.judul)}. *Nusantara of Research*. ${m.vol||"Vol"}(${m.no||"No"}), ${m.hal||"hal."}`;
 }
 function ceCompliance(E){
   const out=[]; const ok=(c,t,h)=>out.push({ok:!!c,t,h});
@@ -2199,7 +2194,7 @@ function normE(r){
   const A=v=>Array.isArray(v)?v.map(x=>String(x)).filter(Boolean):(v?splitList(v):[]);
   const E={judul:String(r.judul||""), penulis:A(r.penulis), institusi:A(r.institusi), email:A(r.email), abstract_en:String(r.abstract_en||""), keywords_en:A(r.keywords_en), abstrak_id:String(r.abstrak_id||""), kata_kunci_id:A(r.kata_kunci_id), cara_mengutip:String(r.cara_mengutip||""), rujukan:A(r.rujukan), combined:false,
     sections:CE_SECTIONS.map(k=>{ const s=(Array.isArray(r.sections)?r.sections:[]).find(x=>fold(x.key||"").startsWith(fold(k).slice(0,5))) || {}; return {key:k, blocks:(Array.isArray(s.blocks)?s.blocks:[]).map(normBlock).filter(Boolean)}; })};
-  if (!E.cara_mengutip) E.cara_mengutip = autoCite(E);
+  normAuthors(E); E.cara_mengutip = autoCite(E);
   return E;
 }
 function normBlock(b){ if(!b) return null; const t=["p","h2","h3","table","figure","li"].includes(b.t)?b.t:"p"; if (t==="table") return {t, caption:String(b.caption||b.text||""), rows:Array.isArray(b.rows)?b.rows.map(r=>Array.isArray(r)?r.map(String):[String(r)]):[]}; if (t==="figure") return {t, caption:String(b.caption||b.text||""), ref:b.ref?String(b.ref):undefined}; const text=String(b.text||"").trim(); return text?{t, text}:null; }
@@ -2209,7 +2204,7 @@ async function ceCopyedit(){
   const E=C.E; const notes=[]; const base = `Anda copyeditor ${CE_JOURNAL} yang sangat teliti. Lakukan copyediting agar konsisten dengan template dan APA edisi 7. JANGAN mengubah makna, data, angka, atau hasil; JANGAN menambah sumber. Bahasa Indonesia baku (KBBI, EYD V), istilah asing ditulis *miring* dengan tanda bintang, istilah konsisten di seluruh artikel, sitasi dalam teks APA 7 (Nama, Tahun) / Nama (Tahun), 3+ penulis et al. Bila informasi wajib tidak ada, tulis [LENGKAPI: ...].\n\n${RULES_ART}\n`;
   const jobs = [
     {name:"Bagian awal", run: async()=>{ const r = await S.sample.json(base+`\nCopyedit BAGIAN AWAL berikut. Judul maksimal 14 kata, HURUF KAPITAL. Nama penulis tanpa gelar. ABSTRACT harus Bahasa Inggris (terjemahkan setia dari ABSTRAK bila kosong atau bukan Inggris), ABSTRAK Bahasa Indonesia; masing-masing ≤150 kata, satu paragraf, tanpa kutipan, memuat latar belakang, tujuan, metode, hasil, kesimpulan. Keywords/Kata kunci 3–5, huruf kecil, bahasa masing-masing.\n\nINPUT:\n${JSON.stringify({judul:E.judul,penulis:E.penulis,institusi:E.institusi,email:E.email,abstract_en:E.abstract_en,keywords_en:E.keywords_en,abstrak_id:E.abstrak_id,kata_kunci_id:E.kata_kunci_id})}\n\nBalas HANYA JSON dengan kunci yang sama ditambah "catatan":["perubahan yang dilakukan"].`, {modelTier:tier, cache:false, signal:C.ctl.signal});
-      const n=normE(Object.assign({sections:[],rujukan:[]},r)); Object.assign(E,{judul:n.judul||E.judul, penulis:n.penulis.length?n.penulis:E.penulis, institusi:n.institusi.length?n.institusi:E.institusi, email:n.email.length?n.email:E.email, abstract_en:n.abstract_en||E.abstract_en, keywords_en:n.keywords_en.length?n.keywords_en:E.keywords_en, abstrak_id:n.abstrak_id||E.abstrak_id, kata_kunci_id:n.kata_kunci_id.length?n.kata_kunci_id:E.kata_kunci_id}); E.cara_mengutip=autoCite(E); (r.catatan||[]).forEach(x=>notes.push({t:"Bagian awal",n:String(x)})); }},
+      const n=normE(Object.assign({sections:[],rujukan:[]},r)); const pa=E.authors; Object.assign(E,{judul:n.judul||E.judul, penulis:n.penulis.length?n.penulis:E.penulis, institusi:n.institusi.length?n.institusi:E.institusi, email:n.email.length?n.email:E.email, abstract_en:n.abstract_en||E.abstract_en, keywords_en:n.keywords_en.length?n.keywords_en:E.keywords_en, abstrak_id:n.abstrak_id||E.abstrak_id, kata_kunci_id:n.kata_kunci_id.length?n.kata_kunci_id:E.kata_kunci_id}); normAuthors(E, pa); E.cara_mengutip=autoCite(E); (r.catatan||[]).forEach(x=>notes.push({t:"Bagian awal",n:String(x)})); }},
     ...E.sections.filter(s=>s.blocks.length).map(s=>({name:s.key, run: async()=>{
       const split = s.key==="HASIL" && E.combined;
       const imgMap = {}; s.blocks.forEach(b=>{ if (b.t==="figure") imgMap[b.ref]=b; }); const sendBlocks = s.blocks.map(b=>b.t==="figure"?{t:"figure",ref:b.ref,caption:b.caption}:b);
@@ -2273,11 +2268,12 @@ function mkP(proto, text, o={}){
   if (o.ind) pPr = /<w:ind\b[^>]*\/>/.test(pPr) ? pPr.replace(/<w:ind\b[^>]*\/>/, o.ind) : pPr.replace(/(<w:jc )/, o.ind+"$1");
   rPr = rPr.replace(/<w:rtl[^>]*\/>/,"");
   rPr = rprSet(rprSet(rPr,"b",o.b),"i",o.i); rPr = rprSize(rPr, o.sz);
-  const segs = String(text??"").split(/(\*[^*\n]+\*|\[LENGKAPI:[^\]]*\])/g).filter(s=>s!=="");
+  const segs = String(text??"").split(o.noIt ? /(\^\{[^}]*\}|\[LENGKAPI:[^\]]*\])/g : /(\*[^*\n]+\*|\^\{[^}]*\}|\[LENGKAPI:[^\]]*\])/g).filter(s=>s!=="");
   const runs = segs.map(sg=>{
-    const it = /^\*[^*]+\*$/.test(sg), lk = /^\[LENGKAPI:/.test(sg);
+    const it = !o.noIt && /^\*[^*]+\*$/.test(sg), lk = /^\[LENGKAPI:/.test(sg), sup = /^\^\{[^}]*\}$/.test(sg);
     let rp = it ? rprSet(rPr,"i",true) : rPr; if (lk || o.hl) rp = rprHL(rp);
-    const s = it ? sg.slice(1,-1) : sg;
+    if (sup){ const el='<w:vertAlign w:val="superscript"/>'; const mm=rp.match(/<w:(rtl|cs|em|lang|eastAsianLayout|specVanish|oMath)\b/); rp = mm ? rp.replace(mm[0], el+mm[0]) : rp+el; }
+    const s = it ? sg.slice(1,-1) : sup ? sg.slice(2,-1) : sg;
     return s.split("\n").map((ln,k)=>`<w:r><w:rPr>${rp}</w:rPr>${k?"<w:br/>":""}<w:t xml:space="preserve">${xe(ln.replace(/\t/g," "))}</w:t></w:r>`).join("");
   }).join("");
   return `<w:p>${pPr}${runs}</w:p>`;
@@ -2295,9 +2291,11 @@ async function buildTemplateDocx(E, meta){
   BASE_RPR = rprSet(rprSet(protoParts(P.body).rPr,"b",false),"i",false);
   const out=[]; const images=[]; let imgN=0;
   out.push(mkP(P.title, E.judul.toUpperCase(), {b:true}));
-  out.push(mkP(P.auth, E.penulis.join(", ")||"[LENGKAPI: nama penulis]", {b:true}));
-  out.push(mkP(P.inst, E.institusi.join("\n")||"[LENGKAPI: institusi]"));
-  out.push(mkP(P.mail, E.email.join(", ")||"[LENGKAPI: e-mail]"));
+  const AL = authorLines(E);
+  out.push(mkP(P.auth, AL.auth, {b:true, noIt:true}));
+  out.push(mkP(P.inst, AL.inst.join("\n"), {noIt:true}));
+  out.push(mkP(P.mail, AL.mail, {noIt:true}));
+  E.cara_mengutip = autoCite(E);
   out.push(fillParas(P.absEN,(k,p)=> k===1 ? mkP(p, E.abstract_en||"[LENGKAPI: abstract in English]") : k===3 ? mkP(p, E.keywords_en.join("; ")||"[LENGKAPI: keywords]") : k===4 ? "" : null));
   out.push(P.sp5);
   out.push(fillParas(P.absID,(k,p)=> k===1 ? mkP(p, E.abstrak_id||"[LENGKAPI: abstrak]") : k===3 ? mkP(p, E.kata_kunci_id.join("; ")||"[LENGKAPI: kata kunci]") : null));
@@ -2349,12 +2347,10 @@ function cePreview(E){
   return `<article class="tp">
     <div class="tp-hdr"><b>JURNAL NUSANTARA OF RESEARCH</b><span>${esc(ceState().meta.tahun||"")}${ceState().meta.vol?`, Vol.${esc(ceState().meta.vol)}`:""}${ceState().meta.no?`, No.${esc(ceState().meta.no)}`:""}</span></div>
     <h2 class="tp-title">${mi(E.judul.toUpperCase()||"[JUDUL]")}</h2>
-    <p class="tp-auth">${mi(E.penulis.join(", ")||"[LENGKAPI: nama penulis]")}</p>
-    <p class="tp-inst">${E.institusi.map(mi).join("<br>")||mi("[LENGKAPI: institusi]")}</p>
-    <p class="tp-inst">${mi(E.email.join(", ")||"[LENGKAPI: e-mail]")}</p>
+    ${(AL=>`<p class="tp-auth">${supHTML(AL.auth)}</p><p class="tp-inst">${AL.inst.map(supHTML).join("<br>")}</p><p class="tp-inst">${supHTML(AL.mail)}</p>`)(authorLines(E))}
     <div class="tp-abs"><div class="tp-absl"><b>ABSTRACT</b><p>${mi(E.abstract_en||"[LENGKAPI: abstract]")}</p></div><div class="tp-absr"><b>Keywords</b><p>${mi(E.keywords_en.join("; "))}</p></div></div>
     <div class="tp-abs"><div class="tp-absl"><b>ABSTRAK</b><p>${mi(E.abstrak_id||"[LENGKAPI: abstrak]")}</p></div><div class="tp-absr"><b>Kata Kunci</b><p>${mi(E.kata_kunci_id.join("; "))}</p></div></div>
-    <div class="tp-cite"><b>Cara mengutip:</b> ${mi(E.cara_mengutip)}</div>
+    <div class="tp-cite"><b>Cara mengutip:</b> ${mi(autoCite(E))}</div>
     ${E.sections.map(s=>`<p class="tp-h1">${s.key}</p>${blocks(s.blocks)||`<p class="tp-p" style="opacity:.5">${s.key==="PEMBAHASAN"&&E.combined?"(masih tergabung dengan HASIL)":"(kosong)"}</p>`}`).join("")}
     <p class="tp-h1">DAFTAR RUJUKAN</p>${[...E.rujukan].sort((a,b)=>fold(a.replace(/\*/g,"")).localeCompare(fold(b.replace(/\*/g,"")))).map(r=>`<p class="tp-ref">${mi(r)}</p>`).join("")}
   </article>`;
@@ -2368,7 +2364,7 @@ function vCopyedit(){
     <p class="small muted" style="margin:-4px 0 12px">Naskah diekstrak per subbab, dirapikan, lalu dikemas ulang memakai berkas template asli: header halaman pertama, header "Nama Pengarang - Judul", footer bernomor halaman, margin 3,5–3–3–3 cm, Arial Narrow, tabel abstrak abu-abu, bingkai "Cara mengutip", dan daftar rujukan berindentasi gantung.</p>
     <div class="toolbar" style="margin-bottom:10px"><span class="small muted">Sumber naskah:</span>${seg("cesrc",C.src,[["upload","Naskah unggahan"],["revisi",hasRev?"Hasil revisi (perubahan diterima)":"Hasil revisi (belum ada)",!hasRev],["instan",S.inst&&S.inst.done?"Hasil revisi instan":"Revisi instan (belum ada)",!(S.inst&&S.inst.done)]])}${seg("mode",S.aiMode,[["teliti","Teliti"],["cepat","Cepat"]])}</div>
     ${!art?`<div class="notice" style="margin-bottom:10px">${icon(IC.info)}<div>Dokumen terpilih adalah <b>${esc(S.tahap.toLowerCase())} skripsi</b>. Claude akan meringkasnya menjadi artikel (pendahuluan dari BAB I–II, metode dari BAB III, hasil dan pembahasan dari BAB IV, kesimpulan dari BAB V) tanpa mengarang data.</div></div>`:""}
-    <div class="grid" style="gap:10px;margin-bottom:10px">${[["tahun","Tahun terbit"],["vol","Volume"],["no","Nomor"],["hal","Halaman (mis. 68-77)"]].map(([k,l])=>`<div class="c3"><label class="small muted" for="ce_${k}">${l}</label><input id="ce_${k}" data-cemeta="${k}" value="${esc(C.meta[k])}" placeholder="opsional" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:13px"></div>`).join("")}</div>
+    <div class="grid" style="gap:10px;margin-bottom:10px">${[["tahun","Tahun terbit"],["vol","Volume"],["no","Nomor"],["reg","Nomor register"],["hal","Halaman (mis. 68-77)"]].map(([k,l])=>`<div class="${k==="hal"||k==="reg"?"c6":"c4"}"><label class="small muted" for="ce_${k}">${l}</label><input id="ce_${k}" data-cemeta="${k}" value="${esc(C.meta[k]||"")}" placeholder="${k==="reg"?"mis. 28213":"opsional"}" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:13px"></div>`).join("")}${doiLiveBox("DOI (otomatis; dipakai di cara mengutip dan LOA)")}</div>
     <div class="toolbar" style="margin:0">
       <button class="btn ${C.E?"":"primary"}" data-act="ceextract" ${C.busy?"disabled":""}>${art?"Ekstrak ulang per subbab":"Ringkas menjadi artikel"}</button>
       ${C.busy?`<button class="btn sm" data-act="cestop">Hentikan</button>`:`<button class="btn ${C.E&&!C.edited?"primary":""}" data-act="cecopyedit" ${C.E&&S.sample?"":"disabled"} title="${S.sample?"":"Copyedit memerlukan koneksi ke Claude"}">Copyedit dengan Claude</button>`}
@@ -2412,12 +2408,12 @@ function admState(){
   return A;
 }
 function admFill(){
-  const A=S.adm; let E=null;
+  const A=S.adm; A.filled=true; let E=null;
   try{ E = (S.ce && S.ce.E) || extractArticle(S.rev && S.rev.done ? "revisi" : "upload"); }catch(e){ console.warn(e); }
-  if (E){ A.judul = E.judul ? smartTitle(E.judul) : A.judul; A.penulis = E.penulis.join(", ") || A.penulis; A.email = E.email[0] || A.email; }
+  if (E){ A.judul = E.judul ? smartTitle(E.judul) : A.judul; A.penulis = E.penulis.join(", ") || A.penulis; const ca=(E.authors||[]).find(a=>a.corr&&a.email); A.email = (ca&&ca.email) || E.email[0] || A.email; }
   A.filled = true;
 }
-const admDOI = A => A.doi.trim() || (A.vol && A.no && A.reg ? `https://doi.org/10.29407/nor.v${A.vol}i${A.no}.${A.reg}` : "");
+const admDOI = A => { const v=String(A.vol||"").replace(/\D/g,""), n=String(A.no||"").replace(/\D/g,""), r=String(A.reg||"").replace(/\D/g,""); return A.doi.trim() || (v && n && r ? `https://doi.org/10.29407/nor.v${v}i${n}.${r}` : ""); };
 const admNoArtikel = A => A.noart || A.reg || (admDOI(A).match(/\.(\d+)\s*$/)||[,""])[1];
 function admTotal(A){ return PAKET[A.paket].items.reduce((a,x)=>a+x[1],0); }
 
@@ -2542,7 +2538,7 @@ function vAdmin(){
       <div class="toolbar" style="margin:10px 0 0">${S.doc?`<button class="btn sm" data-act="admrefill">Ambil ulang dari artikel</button><span class="small muted">Sumber: ${S.ce&&S.ce.E?"hasil Copyediting":S.rev&&S.rev.done?"naskah hasil revisi":"naskah unggahan"}. Data bisa diubah langsung.</span>`:`<button class="btn sm" data-view="unggah">Unggah artikel</button><span class="small muted">Belum ada naskah. Unggah artikel agar judul, penulis, dan e-mail terisi otomatis, atau ketik manual di atas.</span>`}</div></div>
     <section class="grid">
       <div class="card c6"><h3>Letter of Acceptance (LOA)</h3>
-        <div class="grid" style="gap:10px">${inp("nomor","Nomor surat","mis. 123/NOR/VII/2026","text","c6")}${inp("noart","No. Artikel (kolom samping)",A.reg?`otomatis: ${A.reg}`:"28618","text","c6")}${inp("vol","Volume","13","text","c4")}${inp("no","Nomor","4","text","c4")}${inp("tahun","Tahun","2026","text","c4")}${inp("reg","Nomor register","28618","text","c6")}${inp("tgl","Tanggal tanda tangan","","date","c6")}${inp("doi","DOI (barcode)",A.vol&&A.no&&A.reg?`otomatis: ${doi}`:"https://doi.org/10.29407/nor.v13i4.28618","text","c12")}</div>
+        <div class="grid" style="gap:10px">${inp("nomor","Nomor surat","mis. 123/NOR/VII/2026","text","c6")}${inp("noart","No. Artikel (kolom samping)",A.reg?`otomatis: ${A.reg}`:"28618","text","c6")}${inp("vol","Volume","13","text","c4")}${inp("no","Nomor","4","text","c4")}${inp("tahun","Tahun","2026","text","c4")}${inp("reg","Nomor register","28618","text","c6")}${inp("tgl","Tanggal tanda tangan","","date","c6")}${doiLiveBox("DOI (barcode) — otomatis dari volume, nomor, dan nomor register")}${inp("doi","DOI manual (opsional; kosongkan agar otomatis)","","text","c12")}</div>
         <dl class="kv" style="margin-top:12px"><dt>No. Artikel (kolom samping)</dt><dd>#${esc(admNoArtikel(A)||"—")}</dd><dt>Diterima pada</dt><dd>Volume ${esc(A.vol||"…")} Nomor ${esc(A.no||"…")} Tahun ${esc(A.tahun||"…")}</dd><dt>Tanda tangan</dt><dd>Kediri, ${esc(tglIndo(A.tgl))}</dd><dt>Barcode DOI</dt><dd style="word-break:break-all">${esc(doi||"—")}</dd></dl>
         <p class="small muted" style="margin:10px 0">Barcode DOI dibuat sebagai gambar (Code 128) sehingga tampil dan bisa dipindai di komputer mana pun tanpa font tambahan.</p>${S.admWarn==="loa"&&admMissing(A,"loa").length?`<p class="small" style="margin:0 0 10px;color:var(--bad,#c0392b)">Belum diisi: ${esc(admMissing(A,"loa").join(", "))}.</p>`:""}
         <button class="btn primary" data-act="admloa">Unduh LOA (.docx)</button></div>
@@ -3911,8 +3907,8 @@ function ojsData(){
   const titleId = lang==="id" ? smartTitle(judul) : (O.ed.title_id||trTitle); const titleEn = lang==="en" ? smartTitle(judul) : (O.ed.title_en_src||trTitle);
   const trHint = tr ? `Diterjemahkan otomatis dari versi ${lang==="id"?"Bahasa Indonesia":"English"}. Baca sekilas sebelum ditempel.` : "";
   const [pfxEn, tEn] = splitPrefix(titleEn);
-  const authors = (E.penulis||[]).map((n,i)=>{ const [g,f]=splitName(n); return {given:g, family:f, email:(E.email||[])[i]||"", affiliation:(E.institusi||[])[i]||(E.institusi||[])[0]||"", country:"Indonesia", primary: i===0 || /\*/.test(n)}; });
-  const doi = admDOI(A); const vol=A.vol||"", no=A.no||"", year=A.tahun||String(new Date().getFullYear());
+  const authors = ((E.penulis||[]).length ? authorsOf(E) : []).map((x,i)=>{ const [g,f]=splitName(x.name); return {given:g, family:f, email:x.email||"", affiliation:x.inst||(E.institusi||[])[0]||"", country:"Indonesia", primary: !!x.corr}; });
+  const doi = norDOI(); const vol=A.vol||"", no=A.no||"", year=A.tahun||String(new Date().getFullYear());
   const F = [];
   const add = (grp, key, label, val, opt={}) => F.push({grp, key, label, val:String(val??""), ...opt});
   add("Judul & Abstrak (Title & Abstract)","title_id","Title — Bahasa Indonesia", titleId, {hint: lang==="en"?(trHint||"Judul artikel berbahasa Inggris; isi atau terjemahkan judul Indonesia bila jurnal meminta dua bahasa."):""});
@@ -3929,7 +3925,7 @@ function ojsData(){
   add("Identifiers","doi","DOI", doi, {hint: doi?"":"Isi volume, nomor, dan nomor register di menu LOA & Invoice agar DOI terbentuk."});
   add("Issue","issue","Issue", vol&&no?`Vol. ${vol} No. ${no} (${year})`:"", {hint: vol&&no?"":"Isi volume dan nomor di menu LOA & Invoice."});
   add("Issue","section","Section","Articles");
-  add("Issue","pages","Pages", O.ed.pages||"", {hint:"Isi rentang halaman, mis. 68-77."});
+  add("Issue","pages","Pages", O.ed.pages||(S.ce&&S.ce.meta.hal)||"", {hint:"Isi rentang halaman, mis. 68-77."});
   add("Issue","urlpath","URL Path", A.reg||"");
   add("Izin & Hak Cipta (Permissions & Disclosure)","copyholder","Copyright Holder", authors.map(a=>[a.given,a.family].filter(Boolean).join(" ")).join(", ")||"Author(s)");
   add("Izin & Hak Cipta (Permissions & Disclosure)","copyyear","Copyright Year", year);
@@ -4214,6 +4210,95 @@ function vNor(){
         ${NOR_STAGES.map(s=>{ const it=NOR_NEEDS[s.id].items; return `<tr><td><button class="linkish" data-norstage="${s.id}">${s.grp==="Workflow"?"Workflow → ":""}${esc(s.label)}</button></td>${[2,1,0].map(k=>`<td style="text-align:center;color:${NOR_MARK[k][2]};font-weight:700">${it.filter(x=>x[0]===k).length||"–"}</td>`).join("")}</tr>`; }).join("")}
       </tbody></table></div></div>`;
 }
+
+/* ═════════════ IDENTITAS PENULIS, DOI OTOMATIS, CARA MENGUTIP APA 7 ═════════════ */
+const NOR_JOURNAL_FULL = "Nusantara of Research : Jurnal Hasil-Hasil Penelitian Universitas Nusantara PGRI Kediri";
+const SUP_D = {"¹":"1","²":"2","³":"3","⁴":"4","⁵":"5","⁶":"6","⁷":"7","⁸":"8","⁹":"9","⁰":"0"};
+const supNorm = s => String(s||"").replace(/[¹²³⁴⁵⁶⁷⁸⁹⁰]/g, c=>SUP_D[c]);
+// penanda pangkat di akhir teks: "Mulyani1*" → {text:"Mulyani", mk:"1*"}; loose=true untuk nama (boleh berspasi)
+function splitMk(s, loose){
+  s = supNorm(s).trim();
+  const re = loose ? /\s*((?:\d+\*?|\*)(?:\s*,\s*(?:\d+\*?|\*))*)$/ : /((?:\d+\*?|\*)(?:\s*,\s*(?:\d+\*?|\*))*)$/;
+  const m = re.exec(s); if (!m) return {text:s, mk:""};
+  const head = s.slice(0, m.index).trim(); if (!/[A-Za-zÀ-ÿ.)'’]$/.test(head)) return {text:s, mk:""};
+  return {text:head, mk:m[1].replace(/\s+/g,"")};
+}
+const mkNums = mk => (String(mk||"").match(/\d+/g)||[]).map(Number);
+const cleanName = n => String(n||"").replace(/\s+/g," ").replace(/^[,;\s]+|[,;\s]+$/g,"").trim();
+function norMeta(){ const C=S.ce; const A=admState(); const m = C ? C.meta : {}; return {tahun:m.tahun||A.tahun||"", vol:m.vol||A.vol||"", no:m.no||A.no||"", reg:m.reg||A.reg||"", hal:m.hal||""}; }
+function norDOI(m){ const A=admState(); if (A.doi && A.doi.trim()) return A.doi.trim(); m = m||norMeta(); const v=String(m.vol).replace(/\D/g,""), n=String(m.no).replace(/\D/g,""), r=String(m.reg).replace(/\D/g,""); return v&&n&&r ? `https://doi.org/10.29407/nor.v${v}i${n}.${r}` : ""; }
+function normAuthors(E, prev){
+  if (prev && prev.length && prev.length===(E.penulis||[]).length){
+    E.authors = prev.map((a,i)=>({...a, name: cleanName(splitMk(E.penulis[i],true).text) || a.name}));
+  } else {
+    // nama penulis (penanda yang terpisah koma, mis. "Nama1,2", digabung ke nama sebelumnya)
+    const au=[]; (E.penulis||[]).forEach(t=>{ const s=supNorm(t).trim(); if (/^[\d*\s,]+$/.test(s)){ if (au.length) au[au.length-1].mk += (au[au.length-1].mk?",":"")+s.replace(/\s+/g,""); return; } const {text,mk}=splitMk(s,true); const nm=cleanName(text.replace(/\*+$/,"")); if (nm) au.push({name:nm, mk: mk || (/\*$/.test(text)?"*":"")}); });
+    // institusi: "¹Universitas A", "Universitas A1*,2,3", atau "Universitas A (Nama, Nama)"
+    const insts = (E.institusi||[]).flatMap(l=>String(l).split(/\n/)).map(l=>{ let s=supNorm(l).trim(); let lead=null; const lm=/^(\d+)\s*[).]?\s*(?=[A-Za-z])/.exec(s); if (lm){ lead=+lm[1]; s=s.slice(lm[0].length); }
+      let names=[]; const pm=/\s*\(([^)]*)\)\s*$/.exec(s); if (pm && /[A-Za-z]/.test(pm[1]) && !/^(persero|tbk)$/i.test(pm[1].trim())){ names=pm[1].split(/,|\s+dan\s+|\s&\s/).map(x=>fold(cleanName(x))).filter(Boolean); s=s.slice(0,pm.index); }
+      const {text,mk}=splitMk(s,false); return {name:cleanName(text), lead, nums:mkNums(mk), names}; }).filter(x=>x.name);
+    // e-mail beserta penanda/nama di belakangnya
+    const lines = (E._mail && E._mail.length) ? E._mail : (E.email||[]);
+    const mails=[]; lines.forEach(l=>{ const s=supNorm(l); const re=/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g; let m; while((m=re.exec(s))){ let em=m[0], mk=""; const tm=/^(.*\.[A-Za-z]{2,})(\d+)$/.exec(em); if (tm){ em=tm[1]; mk=tm[2]; } const rest=s.slice(m.index+m[0].length); mk += (rest.match(/^[\d*]+/)||[""])[0]; const pn=/^[\d*\s]*\(([^)@]+)\)/.exec(rest); mails.push({email:em.replace(/\.$/,""), mk, name: pn?fold(cleanName(pn[1])):""}); } });
+    const nA = au.length;
+    au.forEach((a,i)=>{ const nums=mkNums(a.mk);
+      let hit = insts.filter(x=>x.names.length && x.names.includes(fold(a.name)));
+      if (!hit.length) hit = insts.filter(x=>x.lead!=null && nums.includes(x.lead));
+      if (!hit.length) hit = insts.filter(x=>x.nums.length && (nums.length ? x.nums.some(k=>nums.includes(k)) : x.nums.includes(i+1)));
+      if (!hit.length && insts.length) hit = [insts.length===1 ? insts[0] : insts[Math.min(i, insts.length-1)]];
+      a.inst = hit.map(x=>x.name).filter((v,k,arr)=>arr.indexOf(v)===k).join("; ");
+    });
+    const used=new Set();
+    mails.forEach((m,k)=>{ let j = m.name ? au.findIndex(a=>fold(a.name)===m.name) : -1;
+      if (j<0){ const n=mkNums(m.mk)[0]; if (n && n<=nA && !used.has(n-1)) j=n-1; }
+      if (j<0) j = au.findIndex((a,x)=>!used.has(x) && !a.email);
+      if (j>=0 && !used.has(j)){ au[j].email=m.email; used.add(j); if (/\*/.test(m.mk)) au[j].corr=true; } });
+    au.forEach(a=>{ if (/\*/.test(a.mk)) a.corr=true; });
+    if (au.length && !au.some(a=>a.corr)) au[0].corr=true;
+    E.authors = au.map(a=>({name:a.name, inst:a.inst||"", email:a.email||"", corr:!!a.corr}));
+  }
+  const A=E.authors; E.penulis = A.map(a=>a.name); E.institusi = [...new Set(A.map(a=>a.inst).filter(Boolean))]; if (A.some(a=>a.email)) E.email = A.map(a=>a.email).filter(Boolean);
+  return A;
+}
+const authorsOf = E => (E.authors && E.authors.length===(E.penulis||[]).length) ? E.authors : normAuthors(E);
+// baris identitas dengan penanda pangkat ^{…}
+function authorLines(E){
+  const A=authorsOf(E); const mk=(i)=>`${i+1}${A[i].corr?"*":""}`;
+  const auth = A.map((a,i)=>`${a.name}^{${mk(i)}}`).join(", ");
+  const insts=[...new Set(A.map(a=>a.inst||"").filter(Boolean))];
+  const inst = insts.map(n=>`${n}^{${A.map((a,i)=>a.inst===n?mk(i):null).filter(Boolean).join(",")}}`);
+  if (A.some(a=>!a.inst)) inst.push(`[LENGKAPI: institusi ${A.map((a,i)=>a.inst?null:a.name).filter(Boolean).join(", ")}]`);
+  const em = A.map((a,i)=>a.email?`${a.email}^{${mk(i)}}`:null).filter(Boolean);
+  const miss = A.filter(a=>!a.email).map(a=>a.name);
+  const mail = `*) Corresponding author, e-mail : ${em.join(", ")}${miss.length?`${em.length?", ":""}[LENGKAPI: e-mail ${miss.join(", ")}]`:""}`;
+  return {auth: auth||"[LENGKAPI: nama penulis]", inst: inst.length?inst:["[LENGKAPI: institusi]"], mail};
+}
+const supHTML = s => esc(s).replace(/\^\{([^}]*)\}/g,"<sup>$1</sup>").replace(/\[LENGKAPI:[^\]]*\]/g,m=>`<mark>${m}</mark>`);
+// nama APA 7: "Andini Resky Mulyani" → "Mulyani, A. R."
+function apaName(n){ const p=cleanName(n).split(/\s+/).filter(Boolean); if (p.length<=1) return p[0]||""; const fam=p.pop(); return `${fam}, ${p.map(g=>g.split("-").filter(Boolean).map(x=>x[0].toUpperCase()+".").join("-")).join(" ")}`; }
+function apaAuthors(names){
+  const a=names.map(apaName).filter(Boolean); if (!a.length) return "[LENGKAPI: nama penulis]";
+  if (a.length===1) return a[0];
+  if (a.length<=20) return a.slice(0,-1).join(", ")+", & "+a[a.length-1];
+  return a.slice(0,19).join(", ")+", . . . "+a[a.length-1];
+}
+function autoCite(E){
+  const m=norMeta(); const doi=norDOI(m); const t=smartTitle(E.judul||"[LENGKAPI: judul]").replace(/\s+$/,"");
+  const hal=String(m.hal||"").trim().replace(/\s*[-–—]\s*/,"–"); const halOk = hal && !/^0*–0*$/.test(hal);
+  const vn = m.vol ? `, *${String(m.vol).replace(/\D/g,"")||m.vol}*${m.no?`(${String(m.no).replace(/\D/g,"")||m.no})`:""}` : "";
+  const au=apaAuthors(authorsOf(E).map(a=>a.name));
+  return `${au}${/\.$/.test(au)?"":"."} (${m.tahun||"n.d."}). ${t}${/[.?!]$/.test(t)?"":"."} *${NOR_JOURNAL_FULL}*${vn}${halOk?`, ${hal}`:""}.${doi?` ${doi}`:""}`;
+}
+// tampilkan DOI langsung saat volume/nomor/register diketik
+function syncNorMeta(k, v){
+  if (!["vol","no","tahun","reg"].includes(k)) return;
+  const A=admState(); A[k]=v; if (S.ce){ S.ce.meta[k]=v; if (S.ce.E) S.ce.E.cara_mengutip=autoCite(S.ce.E); }
+}
+function refreshDoiLive(){ const d=norDOI(); document.querySelectorAll(".doi-live").forEach(el=>{ el.textContent = d || el.dataset.empty || "—"; el.classList.toggle("muted", !d); }); }
+document.addEventListener("input", e=>{ const t=e.target; if (!t.dataset) return;
+  if (t.dataset.adm){ const k=t.dataset.adm; admState()[k]=t.value.trim(); syncNorMeta(k, t.value.trim()); refreshDoiLive(); }
+  else if (t.dataset.cemeta){ const k=t.dataset.cemeta; ceState().meta[k]=t.value.trim(); syncNorMeta(k, t.value.trim()); refreshDoiLive(); } });
+function doiLiveBox(label){ const d=norDOI(); return `<div class="c12"><div class="small muted">${label}</div><div class="doi-live ${d?"":"muted"}" data-empty="Isi volume, nomor, dan nomor register — DOI tersusun otomatis: https://doi.org/10.29407/nor.v{volume}i{nomor}.{register}" style="margin-top:4px;padding:9px 11px;border:1px dashed var(--line);border-radius:10px;font-size:13px;font-weight:600;word-break:break-all">${esc(d||"Isi volume, nomor, dan nomor register — DOI tersusun otomatis: https://doi.org/10.29407/nor.v{volume}i{nomor}.{register}")}</div></div>`; }
 
 /* ═════════════ RUN ═════════════ */
 const WEIGHTS = {struktur:{e:5,w:2,cap:25},isi:{e:3,w:1,cap:15},abstrak:{e:3,w:1.5,cap:12},bahasa:{e:1.5,w:.5,cap:12},sitasi:{e:2,w:1,cap:16},visual:{e:2,w:1,cap:8},format:{e:3,w:1.5,cap:12}};
@@ -4569,7 +4654,9 @@ function render(){
   $("#btnReset").disabled = !S.doc && !S.chat.length;
   $("#selJenis").disabled = false;
   const views = {overview:()=>dlBar("overall")+vOverview(),perbab:vPerBab,naskah:vNaskah,struktur:vStruktur,isi:()=>findingsView("isi"),abstrak:vAbstrak,bahasa:vBahasa,sitasi:vSitasi,visual:()=>findingsView("visual"),format:vFormat,ai:()=>vAI()+(S.ai&&!isArt()&&!S.aiBusy?vReviewDl():""),revisi:vRevisi,copyedit:vCopyedit,template:vTemplate,ojs:vOJS,nor:vNor,banding:vBanding,grammar:vGrammar,similarity:vSimilarity,aicheck:vAICheck,admin:vAdmin,chat:vChat,unggah:vUnggah};
+  const ae=document.activeElement; const keep = ae && ae.id && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) && $("#view").contains(ae) ? {id:ae.id, s:ae.selectionStart, e:ae.selectionEnd} : null;
   $("#view").innerHTML = (isNorView(S.view)?vNorBar():"") + (staging ? vStage() : (S.view==="chat" && !S.local ? vStage() : views[S.view]()));
+  if (keep){ const el=document.getElementById(keep.id); if (el){ el.focus({preventScroll:true}); try{ if (keep.s!=null) el.setSelectionRange(keep.s, keep.e); }catch(_){} } }
   $("#foot").textContent = `${isArt()?"Template artikel jurnal Nusantara of Research":"Pedoman KTI 2025"} · Hasil bersifat pendamping; keputusan akhir tetap pada dosen pembimbing dan editor.`;
   const msgs=$("#msgs"); if(msgs) msgs.scrollTop=msgs.scrollHeight;
 }
@@ -4913,7 +5000,7 @@ document.addEventListener("click", e=>{ if (e.target && (e.target.id==="fileIn2"
 document.addEventListener("submit", e=>{ if(e.target.id==="chatForm"){ e.preventDefault(); const t=$("#chatIn"); const q=t.value; t.value=""; sendChat(q); } });
 document.addEventListener("keydown", e=>{ if(e.key==="Escape" && S.menuOpen) closeMenu(); });
 document.addEventListener("keydown", e=>{ if(e.target.id==="chatIn" && e.key==="Enter" && !e.shiftKey){ e.preventDefault(); $("#chatForm").requestSubmit(); } });
-document.addEventListener("change", e=>{ if(e.target.id==="fileIn2"||e.target.id==="fileIn"){ handleFile(e.target.files[0]); e.target.value=""; } if(e.target.id==="withAI") S.withAI=e.target.checked; if(e.target.id==="useScite") S.useScite=e.target.checked; if(e.target.dataset && e.target.dataset.cemeta){ const C=ceState(); C.meta[e.target.dataset.cemeta]=e.target.value.trim(); if (C.E && C.E.autoCite) C.E.cara_mengutip=autoCite(C.E); render(); } if(e.target.dataset && e.target.dataset.revsec!=null){ const cur=revSecs().slice(); const s=e.target.dataset.revsec; S.revSecSel = e.target.checked ? REV_SECTIONS.filter(x=>cur.includes(x)||x===s) : cur.filter(x=>x!==s); if (!S.revSecSel.length) S.revSecSel=[]; render(); } if(e.target.dataset && e.target.dataset.withapx){ S.withAppendix=e.target.checked; render(); } if(e.target.dataset && e.target.dataset.aiunit!=null){ const cur=aiSel(); const u=e.target.dataset.aiunit; const all=unitsForRevision(); const next = e.target.checked ? all.filter(x=>cur.includes(x)||x===u) : cur.filter(x=>x!==u); S.aiUnits = next.length===all.length ? null : next; render(); } if(e.target.id==="aiPerBab"){ S.aiPerBab=e.target.checked; } if(e.target.id==="invPaid"){ admState().paid=e.target.checked; render(); } if(e.target.dataset && e.target.dataset.ojsed){ ojsState().ed[e.target.dataset.ojsed]=e.target.value; } if(e.target.id==="revNote"){ S.revNote=e.target.value; } if(e.target.dataset && e.target.dataset.revnoter){ (S.revNoteR=S.revNoteR||{})[e.target.dataset.revnoter]=e.target.value; } if(e.target.id==="revNoDup"){ S.revNoDup=e.target.checked; } if(e.target.dataset && e.target.dataset.incl!=null){ setIncl(e.target.dataset.incl, e.target.checked); render(); } if(e.target.dataset && e.target.dataset.cmpslot){ const k=e.target.dataset.cmpslot, f=e.target.files[0]; e.target.value=""; if (f){ const C=cmpState(); C.busy="Membaca "+(f.name||"berkas")+"…"; C.err=""; render(); readAnyDoc(f).then(d=>{ C.docs[k]=d; C.res=null; C.act=null; }).catch(err=>{ C.err=(k==="awal"?"Naskah awal":k==="akhir"?"Naskah revisi":"Dokumen review")+": "+(err.message||err); }).finally(()=>{ C.busy=""; render(); }); } } if(e.target.id==="simRef"){ const f=e.target.files[0]; e.target.value=""; if (f) readAnyDoc(f).then(d=>{ simState().refs.push({name:d.name, text:d.paras.map(p=>p.text).join(" ")}); render(); }).catch(err=>toast("Pembanding tidak terbaca: "+(err.message||err))); } if(e.target.id==="tplIn"){ useTemplateFile(e.target.files[0]); e.target.value=""; } if(e.target.dataset && e.target.dataset.revname!=null){ revNames()[e.target.dataset.revname]=e.target.value.trim(); saveRevNames(); render(); } if(e.target.dataset && e.target.dataset.cmtopt){ cmtOpt()[e.target.dataset.cmtopt]=e.target.checked; render(); } if(e.target.dataset && e.target.dataset.srcdb){ srcOpt()[e.target.dataset.srcdb]=e.target.checked; render(); } if(e.target.dataset && e.target.dataset.adm){ admState()[e.target.dataset.adm]=e.target.value.trim(); render(); } if(e.target.id==="jrUrl"){ S.jr.url=e.target.value.trim(); saveJR(); render(); } if(e.target.id==="jrInfo"){ S.jr.info=e.target.value; saveJR(); } if(e.target.dataset && e.target.dataset.done!=null){ S.revDone[e.target.dataset.done]=e.target.checked; saveDone(); render(); } });
+document.addEventListener("change", e=>{ if(e.target.id==="fileIn2"||e.target.id==="fileIn"){ handleFile(e.target.files[0]); e.target.value=""; } if(e.target.id==="withAI") S.withAI=e.target.checked; if(e.target.id==="useScite") S.useScite=e.target.checked; if(e.target.dataset && e.target.dataset.cemeta){ const C=ceState(); C.meta[e.target.dataset.cemeta]=e.target.value.trim(); syncNorMeta(e.target.dataset.cemeta, e.target.value.trim()); if (C.E && C.E.autoCite) C.E.cara_mengutip=autoCite(C.E); setTimeout(render,0); } if(e.target.dataset && e.target.dataset.revsec!=null){ const cur=revSecs().slice(); const s=e.target.dataset.revsec; S.revSecSel = e.target.checked ? REV_SECTIONS.filter(x=>cur.includes(x)||x===s) : cur.filter(x=>x!==s); if (!S.revSecSel.length) S.revSecSel=[]; render(); } if(e.target.dataset && e.target.dataset.withapx){ S.withAppendix=e.target.checked; render(); } if(e.target.dataset && e.target.dataset.aiunit!=null){ const cur=aiSel(); const u=e.target.dataset.aiunit; const all=unitsForRevision(); const next = e.target.checked ? all.filter(x=>cur.includes(x)||x===u) : cur.filter(x=>x!==u); S.aiUnits = next.length===all.length ? null : next; render(); } if(e.target.id==="aiPerBab"){ S.aiPerBab=e.target.checked; } if(e.target.id==="invPaid"){ admState().paid=e.target.checked; render(); } if(e.target.dataset && e.target.dataset.ojsed){ ojsState().ed[e.target.dataset.ojsed]=e.target.value; } if(e.target.id==="revNote"){ S.revNote=e.target.value; } if(e.target.dataset && e.target.dataset.revnoter){ (S.revNoteR=S.revNoteR||{})[e.target.dataset.revnoter]=e.target.value; } if(e.target.id==="revNoDup"){ S.revNoDup=e.target.checked; } if(e.target.dataset && e.target.dataset.incl!=null){ setIncl(e.target.dataset.incl, e.target.checked); render(); } if(e.target.dataset && e.target.dataset.cmpslot){ const k=e.target.dataset.cmpslot, f=e.target.files[0]; e.target.value=""; if (f){ const C=cmpState(); C.busy="Membaca "+(f.name||"berkas")+"…"; C.err=""; render(); readAnyDoc(f).then(d=>{ C.docs[k]=d; C.res=null; C.act=null; }).catch(err=>{ C.err=(k==="awal"?"Naskah awal":k==="akhir"?"Naskah revisi":"Dokumen review")+": "+(err.message||err); }).finally(()=>{ C.busy=""; render(); }); } } if(e.target.id==="simRef"){ const f=e.target.files[0]; e.target.value=""; if (f) readAnyDoc(f).then(d=>{ simState().refs.push({name:d.name, text:d.paras.map(p=>p.text).join(" ")}); render(); }).catch(err=>toast("Pembanding tidak terbaca: "+(err.message||err))); } if(e.target.id==="tplIn"){ useTemplateFile(e.target.files[0]); e.target.value=""; } if(e.target.dataset && e.target.dataset.revname!=null){ revNames()[e.target.dataset.revname]=e.target.value.trim(); saveRevNames(); render(); } if(e.target.dataset && e.target.dataset.cmtopt){ cmtOpt()[e.target.dataset.cmtopt]=e.target.checked; render(); } if(e.target.dataset && e.target.dataset.srcdb){ srcOpt()[e.target.dataset.srcdb]=e.target.checked; render(); } if(e.target.dataset && e.target.dataset.adm){ admState()[e.target.dataset.adm]=e.target.value.trim(); syncNorMeta(e.target.dataset.adm, e.target.value.trim()); setTimeout(render,0); } if(e.target.id==="jrUrl"){ S.jr.url=e.target.value.trim(); saveJR(); render(); } if(e.target.id==="jrInfo"){ S.jr.info=e.target.value; saveJR(); } if(e.target.dataset && e.target.dataset.done!=null){ S.revDone[e.target.dataset.done]=e.target.checked; saveDone(); render(); } });
 document.addEventListener("dragover", e=>{ const d=e.target.closest&&e.target.closest("#drop"); if(d){ e.preventDefault(); d.classList.add("over"); } });
 document.addEventListener("dragleave", e=>{ const d=e.target.closest&&e.target.closest("#drop"); if(d) d.classList.remove("over"); });
 document.addEventListener("drop", e=>{ const d=e.target.closest&&e.target.closest("#drop"); if(d){ e.preventDefault(); d.classList.remove("over"); handleFile(e.dataTransfer.files[0]); } });
