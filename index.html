@@ -2092,7 +2092,7 @@ function vRevisiBase(){
 /* ═════════════ COPYEDITING → TEMPLATE JURNAL ═════════════ */
 const CE_SECTIONS = ["PENDAHULUAN","METODE","HASIL","PEMBAHASAN","KESIMPULAN DAN SARAN"];
 const CE_JOURNAL = "Jurnal Nusantara of Research";
-function ceState(){ if (!S.ce) S.ce = {src: S.rev && S.rev.done ? "revisi" : "upload", E:null, notes:[], busy:false, prog:"", err:"", meta:{tahun:(S.adm&&S.adm.tahun)||String(new Date().getFullYear()), vol:(S.adm&&S.adm.vol)||"", no:(S.adm&&S.adm.no)||"", reg:(S.adm&&S.adm.reg)||"", hal:""}}; return S.ce; }
+function ceState(){ if (!S.ce) S.ce = {src: S.rev && S.rev.done ? "revisi" : "upload", E:null, notes:[], busy:false, prog:"", err:"", meta:{footer:"oddRight", tahun:(S.adm&&S.adm.tahun)||String(new Date().getFullYear()), vol:(S.adm&&S.adm.vol)||"", no:(S.adm&&S.adm.no)||"", reg:(S.adm&&S.adm.reg)||"", hal:""}}; return S.ce; }
 const splitList = s => String(s||"").split(/[;,]/).map(x=>x.trim().replace(/\.$/,"")).filter(Boolean);
 function sourceParas(src){
   if (src==="instan" && S.inst && S.inst.done) return instantParas().map(p=>({tag:p.tag==="table"||p.tag==="img"||p.tag==="li"?p.tag:(p.isHead||p.isBab?"h":p.tag==="h"?"h":"p"), text:p.text, b:p.b, it:p.it, em:p.em, cells:p.cells, artLvl:p.artLvl, img:p.img}));
@@ -2265,6 +2265,7 @@ function mkP(proto, text, o={}){
   let {pPr, rPr} = protoParts(proto); if (!rPr) rPr = BASE_RPR;
   pPr = pPr.replace(/<w:numPr>[\s\S]*?<\/w:numPr>/,"");
   if (o.al) pPr = /<w:jc /.test(pPr) ? pPr.replace(/<w:jc w:val="[^"]*"\/>/,`<w:jc w:val="${o.al}"/>`) : pPr.replace("</w:pPr>",`<w:jc w:val="${o.al}"/></w:pPr>`);
+  if (o.after!=null){ const sp=pPr.match(/<w:spacing\b[^>]*\/>/); if (sp) pPr = pPr.replace(sp[0], /w:after="/.test(sp[0]) ? sp[0].replace(/w:after="[^"]*"/,`w:after="${o.after}"`) : sp[0].replace("<w:spacing",`<w:spacing w:after="${o.after}"`)); else { const at=pPr.match(/<w:(ind|jc|rPr)\b|<\/w:pPr>/); pPr = pPr.replace(at[0], `<w:spacing w:after="${o.after}"/>`+at[0]); } }
   if (o.ind) pPr = /<w:ind\b[^>]*\/>/.test(pPr) ? pPr.replace(/<w:ind\b[^>]*\/>/, o.ind) : pPr.replace(/(<w:jc )/, o.ind+"$1");
   rPr = rPr.replace(/<w:rtl[^>]*\/>/,"");
   rPr = rprSet(rprSet(rPr,"b",o.b),"i",o.i); rPr = rprSize(rPr, o.sz);
@@ -2321,12 +2322,12 @@ async function buildTemplateDocx(E, meta){
         else out.push(mkP(P.figBox, b.img&&b.img.chart?"[Grafik Word dari naskah asli — sisipkan ulang di sini]":"[Sisipkan gambar/grafik di sini]", {hl:true, al:"center"}));
         if (b.caption) out.push(mkP(P.fcap, b.caption, {b:true, al:"center"}));
       }
-      else out.push(mkP(P.body, b.text, {b:false}));
+      else out.push(mkP(P.body, b.text, {b:false, after:120}));
     });
     out.push(P.sp13);
   });
   out.push(mkP(P.refHead, "DAFTAR RUJUKAN", {b:true,i:false}));
-  [...E.rujukan].sort((a,b)=>fold(a.replace(/\*/g,"")).localeCompare(fold(b.replace(/\*/g,"")))).forEach(r=>out.push(mkP(P.ref, r, {b:false,i:false, ind:`<w:ind w:left="720" w:hanging="720"/>`})));
+  [...E.rujukan].sort((a,b)=>fold(a.replace(/\*/g,"")).localeCompare(fold(b.replace(/\*/g,"")))).forEach(r=>out.push(mkP(P.ref, r, {b:false,i:false, after:120, ind:`<w:ind w:left="720" w:hanging="720"/>`})));
   const newDoc = docXml.replace(/<w:body>[\s\S]*<\/w:body>/, `<w:body>${out.join("")}${sect}</w:body>`);
   zip.file("word/document.xml", newDoc);
   await addImagesToZip(zip, "word/_rels/document.xml.rels", images);
@@ -2334,8 +2335,7 @@ async function buildTemplateDocx(E, meta){
   const short = (E.penulis.length>2?`${surnameOf(E.penulis[0])} dkk.`:E.penulis.map(surnameOf).join(" & ")) + " - " + (smartTitle(E.judul).split(/\s+/).slice(0,8).join(" ")+(words(E.judul).length>8?"…":""));
   const m = meta||{};
   await rep("word/header1.xml", [["2019, Vol.6, No.2, 68-77", (m.tahun||m.vol||m.no||m.hal) ? `${m.tahun||"Tahun"}, Vol.${m.vol||"…"}, No.${m.no||"…"}, ${m.hal||"…"}` : ""]]);
-  await rep("word/header2.xml", [["Nama Pengarang - Judul", short]]);
-  await rep("word/footer2.xml", [["Thn,", m.tahun?`${m.tahun},`:""], ["Vol..., No...,Hal....-....", (m.vol||m.no||m.hal)?`Vol.${m.vol||"…"}, No.${m.no||"…"}, Hal.${m.hal||"…"}`:""]]);
+  await norPageFurniture(zip, E, m);
   return await zip.generateAsync({type:"blob", mimeType:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
 }
 async function ceDownload(){ const C=ceState(); if (!C.E) return; try{ const blob=await buildTemplateDocx(C.E, C.meta); await saveFile(`Artikel_Template_${baseName()}.docx`, blob, "Artikel sesuai template disimpan."); }catch(e){ console.error(e); toast("Artikel gagal dikemas: "+(e.message||e)); } }
@@ -2364,6 +2364,7 @@ function vCopyedit(){
   const head = up + `<div class="card"><h3>Copyediting ke template jurnal<span class="r">${CE_JOURNAL}</span></h3>
     <p class="small muted" style="margin:-4px 0 12px">Naskah diekstrak per subbab, dirapikan, lalu dikemas ulang memakai berkas template asli: header halaman pertama, header "Nama Pengarang - Judul", footer bernomor halaman, margin 3,5–3–3–3 cm, Arial Narrow, tabel abstrak abu-abu, bingkai "Cara mengutip", dan daftar rujukan berindentasi gantung.</p>
     <div class="toolbar" style="margin-bottom:10px"><span class="small muted">Sumber naskah:</span>${seg("cesrc",C.src,[["upload","Naskah unggahan"],["revisi",hasRev?"Hasil revisi (perubahan diterima)":"Hasil revisi (belum ada)",!hasRev],["instan",S.inst&&S.inst.done?"Hasil revisi instan":"Revisi instan (belum ada)",!(S.inst&&S.inst.done)]])}${seg("mode",S.aiMode,[["teliti","Teliti"],["cepat","Cepat"]])}</div>
+    <div class="toolbar" style="margin-bottom:10px"><span class="small muted">Footer halaman 2 dst.:</span>${seg("cefooter",C.meta.footer||"oddRight",Object.entries(FTR_SIDES))}<span class="small muted">Header: nama lengkap penulis (tebal miring) dan judul satu baris.</span></div>
     ${!art?`<div class="notice" style="margin-bottom:10px">${icon(IC.info)}<div>Dokumen terpilih adalah <b>${esc(S.tahap.toLowerCase())} skripsi</b>. Claude akan meringkasnya menjadi artikel (pendahuluan dari BAB I–II, metode dari BAB III, hasil dan pembahasan dari BAB IV, kesimpulan dari BAB V) tanpa mengarang data.</div></div>`:""}
     <div class="grid" style="gap:10px;margin-bottom:10px">${[["tahun","Tahun terbit"],["vol","Volume"],["no","Nomor"],["reg","Nomor register"],["hal","Halaman (mis. 68-77)"]].map(([k,l])=>`<div class="${k==="hal"||k==="reg"?"c6":"c4"}"><label class="small muted" for="ce_${k}">${l}</label><input id="ce_${k}" data-cemeta="${k}" value="${esc(C.meta[k]||"")}" placeholder="${k==="reg"?"mis. 28213":"opsional"}" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:13px"></div>`).join("")}${doiLiveBox("DOI (otomatis; dipakai di cara mengutip dan LOA)")}</div>
     <div class="toolbar" style="margin:0">
@@ -4321,6 +4322,56 @@ function ceFinalCard(){
     ${S.ceUpErr?`<div class="upstate err" role="alert" style="margin-top:10px">${icon(IC.warn)}<div>${esc(S.ceUpErr)}</div></div>`:""}</div>`;
 }
 
+/* ═════════════ HEADER HALAMAN 2 DST. & FOOTER GANJIL/GENAP ═════════════ */
+const HF_NS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+const FTR_SIDES = {oddRight:"Ganjil: nomor kanan · Genap: nomor kiri", oddLeft:"Ganjil: nomor kiri · Genap: nomor kanan"};
+const hfRpr = (b,i) => `<w:rPr><w:rFonts w:ascii="Arial Narrow" w:hAnsi="Arial Narrow" w:cs="Arial Narrow" w:eastAsia="Arial Narrow"/>${b?"<w:b/>":'<w:b w:val="0"/>'}${i?"<w:i/>":'<w:i w:val="0"/>'}<w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr>`;
+const hfRun = (t,b,i) => `<w:r>${hfRpr(b,i)}<w:t xml:space="preserve">${xe(t)}</w:t></w:r>`;
+// teks bertanda *miring* → run
+const hfRuns = (t,b) => String(t).split(/(\*[^*]+\*)/).filter(Boolean).map(s=>/^\*[^*]+\*$/.test(s)?hfRun(s.slice(1,-1),b,true):hfRun(s,b,false)).join("");
+// lebar teks Arial Narrow 11 pt (perkiraan dari Arial × 0,82)
+let _hfCtx=null;
+function textPt(t, pt=11){ try{ _hfCtx = _hfCtx || document.createElement("canvas").getContext("2d"); _hfCtx.font = `${pt}px Arial`; return _hfCtx.measureText(String(t).replace(/\*/g,"")).width*0.82; }catch(e){ return String(t).length*pt*0.42; } }
+// judul dimuat satu baris; bila tidak muat dipotong per kata dan diberi "..."
+function fitOneLine(t, maxPt=400){
+  t=String(t||"").trim(); if (textPt(t)<=maxPt) return t;
+  const w=t.split(/\s+/); while (w.length>1 && textPt(w.join(" ")+"...")>maxPt) w.pop();
+  let s=w.join(" ").replace(/[,;:–-]+$/,""); if ((s.match(/\*/g)||[]).length%2) s+="*"; return s+"...";
+}
+function norHeaderXml(E){
+  const names = authorsOf(E).map(a=>a.name).join(", ") || "[Nama Penulis]";
+  const title = fitOneLine(smartTitle(E.judul||"Judul Artikel"));
+  const pp = (jc, extra="") => `<w:pPr><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/>${extra}<w:jc w:val="${jc}"/></w:pPr>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:hdr ${HF_NS}>
+<w:p>${pp("center")}${hfRun(names,true,true)}</w:p>
+<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="000000"/></w:pBdr><w:spacing w:before="0" w:after="240" w:line="240" w:lineRule="auto"/><w:jc w:val="center"/></w:pPr>${hfRuns(title,false)}</w:p></w:hdr>`;
+}
+function norFooterXml(meta, numLeft){
+  const v=String(meta.vol||"").replace(/\D/g,"")||meta.vol, n=String(meta.no||"").replace(/\D/g,"")||meta.no; const hal=String(meta.hal||"").trim();
+  const ref = (v?`${v}${n?`(${n})`:""}`:"") + (hal&&!/^0*\s*[-–]\s*0*$/.test(hal)?`${v?", ":""}${hal}`:"");
+  const jr = hfRun("Nusantara of Research"+(ref?", ":""),true,true) + (ref?hfRun(ref,true,false):"");
+  const pg = `<w:r>${hfRpr(true,false)}<w:fldChar w:fldCharType="begin"/></w:r><w:r>${hfRpr(true,false)}<w:instrText xml:space="preserve"> PAGE </w:instrText></w:r><w:r>${hfRpr(true,false)}<w:fldChar w:fldCharType="separate"/></w:r><w:r>${hfRpr(true,false)}<w:t>2</w:t></w:r><w:r>${hfRpr(true,false)}<w:fldChar w:fldCharType="end"/></w:r>`;
+  const tab = `<w:r>${hfRpr(true,false)}<w:tab/></w:r>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:ftr ${HF_NS}>
+<w:p><w:pPr><w:pBdr><w:top w:val="single" w:sz="6" w:space="1" w:color="000000"/></w:pBdr><w:tabs><w:tab w:val="right" w:pos="8220"/></w:tabs><w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/><w:jc w:val="left"/></w:pPr>${numLeft ? pg+tab+jr : jr+tab+pg}</w:p></w:ftr>`;
+}
+async function norPageFurniture(zip, E, meta){
+  const side = (meta && meta.footer) || "oddRight"; // oddRight: ganjil nomor kanan, genap nomor kiri
+  const hdr = norHeaderXml(E);
+  zip.file("word/header2.xml", hdr); zip.file("word/header3.xml", hdr);
+  zip.file("word/footer2.xml", norFooterXml(meta, side!=="oddRight")); zip.file("word/footer3.xml", norFooterXml(meta, side==="oddRight"));
+  let rels = await zip.file("word/_rels/document.xml.rels").async("string");
+  if (!/Id="rIdNorHe"/.test(rels)) rels = rels.replace("</Relationships>", `<Relationship Id="rIdNorHe" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header3.xml"/><Relationship Id="rIdNorFe" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer3.xml"/></Relationships>`);
+  zip.file("word/_rels/document.xml.rels", rels);
+  let ct = await zip.file("[Content_Types].xml").async("string");
+  if (!/header3\.xml/.test(ct)) ct = ct.replace("</Types>", `<Override PartName="/word/header3.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/><Override PartName="/word/footer3.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/></Types>`);
+  zip.file("[Content_Types].xml", ct);
+  let doc = await zip.file("word/document.xml").async("string");
+  doc = doc.replace(/(<w:sectPr\b[^>]*>)(?![\s\S]*<w:sectPr\b)/, `$1<w:headerReference xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" w:type="even" r:id="rIdNorHe"/><w:footerReference xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" w:type="even" r:id="rIdNorFe"/>`);
+  zip.file("word/document.xml", doc);
+  const sx = zip.file("word/settings.xml"); if (sx){ let s = await sx.async("string"); if (!/<w:evenAndOddHeaders/.test(s)) s = /<w:compat\b/.test(s) ? s.replace(/<w:compat\b/, "<w:evenAndOddHeaders/><w:compat") : s.replace(/(<w:settings\b[^>]*>)/, "$1<w:evenAndOddHeaders/>"); zip.file("word/settings.xml", s); }
+}
+
 /* ═════════════ RUN ═════════════ */
 const WEIGHTS = {struktur:{e:5,w:2,cap:25},isi:{e:3,w:1,cap:15},abstrak:{e:3,w:1.5,cap:12},bahasa:{e:1.5,w:.5,cap:12},sitasi:{e:2,w:1,cap:16},visual:{e:2,w:1,cap:8},format:{e:3,w:1.5,cap:12}};
 const STEPS = ["Membaca susunan bab dan sub-bab","Memeriksa isi setiap bab","Memeriksa abstrak dan kata kunci","Memeriksa ejaan dan diksi","Mencocokkan sitasi dengan daftar pustaka","Memeriksa tabel, gambar, dan format"];
@@ -4938,6 +4989,7 @@ async function exportReport(){
 document.addEventListener("click", e=>{
   const b = e.target.closest("button"); if(!b || b.disabled) return;
   if (b.id==="btnReset") return resetAll();
+  if (b.dataset.cefooter){ ceState().meta.footer=b.dataset.cefooter; return render(); }
   if (b.dataset.norgo){ const [st,v]=b.dataset.norgo.split(":"); S.norStage=st; if (v==="ojs" && S.ce && S.ce.E) ojsState().src=S.ce.src; return go(v); }
   if (b.dataset.norstage){ S.norStage=b.dataset.norstage; return go("nor"); }
   if (b.dataset.view) return go(b.dataset.view);
