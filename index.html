@@ -2406,6 +2406,7 @@ function admState(){
   if (!S.adm) S.adm = {nomor:"", noart:"", vol:"", no:"", tahun:String(new Date().getFullYear()), reg:"", tgl:isoToday(), doi:"", paket:"reguler", invJenis:"deposit", paid:false, tglBayar:isoToday(), tglInv:isoToday(), judul:"", penulis:"", email:"", filled:false};
   const A=S.adm;
   if (!A.filled && S.doc){ admFill(); }
+  if (S.ce && S.ce.E){ const E=S.ce.E; const sig=(E.judul||"")+"|"+(E.penulis||[]).join(",")+"|"+(E.email||[]).join(","); if (A._ceSig!==sig){ A._ceSig=sig; if (E.judul) A.judul=smartTitle(E.judul); if ((E.penulis||[]).length) A.penulis=E.penulis.join(", "); const ca=(E.authors||[]).find(a=>a.corr&&a.email); A.email=(ca&&ca.email)||(E.email||[])[0]||A.email; } }
   return A;
 }
 function admFill(){
@@ -3899,7 +3900,7 @@ function splitPrefix(t){ const m=/^(The|A|An)\s+(.+)$/.exec(String(t||"").trim()
 function splitName(n){ const p=String(n||"").replace(/[*\d¹²³⁴⁵⁶⁷⁸⁹⁰]+/g,"").trim().split(/\s+/).filter(Boolean); if (p.length<=1) return [p[0]||"", ""]; const fam=p.pop(); return [p.join(" "), fam]; }
 function ojsData(){
   const O=ojsState(); const src=ojsSource();
-  let E=null; try{ E = (src==="upload" && S.ce && S.ce.E && S.ce.src==="upload") ? S.ce.E : extractArticle(src); }catch(e){ console.warn(e); }
+  let E=null; try{ E = (S.ce && S.ce.E && S.ce.src===src) ? S.ce.E : extractArticle(src); }catch(e){ console.warn(e); }
   E = E || {judul:"", penulis:[], institusi:[], email:[], abstract_en:"", keywords_en:[], abstrak_id:"", kata_kunci_id:[], rujukan:[]};
   const A=admState(); const judul=String(E.judul||"").trim(); const lang = ojsLang(judul);
   const TR=O.tr||(O.tr={key:"",busy:false,err:"",data:null}); const trKey=ojsTrKey(src, E, lang); const tr = O.trMode!=="naskah" && TR.key===trKey && TR.data ? TR.data : null;
@@ -3971,7 +3972,7 @@ function ojsAutoTranslate(lang, trKey){
 function vOJS(){
   const O=ojsState(); const {F, src, lang, E, trKey} = ojsData(); const TR=O.tr; if (E.judul) ojsAutoTranslate(lang, trKey);
   const L2 = lang==="en" ? "Bahasa Indonesia" : "English";
-  const srcs=[["upload","Naskah unggahan"],["revisi","Hasil Revisi Naskah",!(S.rev&&S.rev.done)],["instan","Hasil Revisi Instan",!(S.inst&&S.inst.done)]];
+  const srcs=[["upload", S.ce&&S.ce.E&&S.ce.src==="upload" ? (S.finalMode?"Artikel final (Copyediting)":"Naskah unggahan · hasil Copyediting") : "Naskah unggahan"],["revisi","Hasil Revisi Naskah",!(S.rev&&S.rev.done)],["instan","Hasil Revisi Instan",!(S.inst&&S.inst.done)]];
   const groups=[...new Set(F.map(f=>f.grp))];
   const field = f => `<div style="margin:0 0 12px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><label class="small" for="ojs_${f.key}" style="font-weight:600;flex:1">${esc(f.label)}</label><button class="btn sm" data-ojscopy="${f.key}" data-ojslabel="${esc(f.label)}">Salin</button></div>
     <textarea id="ojs_${f.key}" data-ojsed="${f.key}" rows="${f.big?6:Math.min(3,Math.max(1,Math.ceil(f.val.length/90)))}" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:13px;font-family:inherit;resize:vertical">${esc(f.val)}</textarea>${f.hint?`<div class="small muted" style="margin-top:3px">${esc(f.hint)}</div>`:""}</div>`;
@@ -4301,6 +4302,14 @@ document.addEventListener("input", e=>{ const t=e.target; if (!t.dataset) return
   else if (t.dataset.cemeta){ const k=t.dataset.cemeta; ceState().meta[k]=t.value.trim(); syncNorMeta(k, t.value.trim()); refreshDoiLive(); } });
 function doiLiveBox(label){ const d=norDOI(); return `<div class="c12"><div class="small muted">${label}</div><div class="doi-live ${d?"":"muted"}" data-empty="Isi volume, nomor, dan nomor register — DOI tersusun otomatis: https://doi.org/10.29407/nor.v{volume}i{nomor}.{register}" style="margin-top:4px;padding:9px 11px;border:1px dashed var(--line);border-radius:10px;font-size:13px;font-weight:600;word-break:break-all">${esc(d||"Isi volume, nomor, dan nomor register — DOI tersusun otomatis: https://doi.org/10.29407/nor.v{volume}i{nomor}.{register}")}</div></div>`; }
 
+function ceLinkBox(){
+  const A=admState(); const E=S.ce.E; const doi=norDOI(); const au=authorsOf(E);
+  const row=(k,v,ok)=>`<tr><td class="small muted" style="padding:3px 10px 3px 0;white-space:nowrap;text-align:left;width:1%">${k}</td><td class="small" style="padding:3px 0;text-align:left">${ok===false?`<span style="color:var(--warn,#c77700)">${esc(v)}</span>`:esc(v)}</td></tr>`;
+  return `<div style="margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)">
+    <div class="small" style="font-weight:700;margin-bottom:6px">Data ini otomatis terhubung ke Production dan Publication</div>
+    <table style="border-collapse:collapse;width:100%">${row("Judul", smartTitle(E.judul||"")||"—")}${row("Penulis", au.map((a,i)=>a.name+(a.corr?" *":"")).join(", ")||"—")}${row("Corresponding", A.email||"—")}${row("Vol / No / Register", [A.vol||"…",A.no||"…",A.reg||"…"].join(" / "), !!(A.vol&&A.no&&A.reg))}${row("DOI", doi||"belum lengkap: isi volume, nomor, dan nomor register", !!doi)}${row("Halaman", (S.ce.meta.hal||"belum diisi"), !!S.ce.meta.hal)}</table>
+    <div class="toolbar" style="margin:10px 0 0"><button class="btn sm" data-norgo="production:admin">Production → LOA & Invoice</button><button class="btn sm" data-norgo="publication:ojs">Publication → Siap Publish (OJS)</button></div></div>`;
+}
 /* ═════════════ COPYEDITING: UNGGAH ARTIKEL FINAL (TANPA REVIEW/REVISI) ═════════════ */
 function ceFinalCard(){
   const busy = S.fileBusy && S.finalUp;
@@ -4308,6 +4317,7 @@ function ceFinalCard(){
     <p class="small" style="margin:0 0 10px">Untuk naskah yang sudah diperbaiki penulis dan tidak perlu direview ulang. Sistem hanya: <b>unggah → ekstrak seluruh isi</b> (judul, penulis, institusi, e-mail, abstrak, kata kunci, semua bagian, tabel, gambar, rujukan) <b>→ sesuaikan dengan template NOR → unduh</b>. Isi tulisan penulis tidak diubah.</p>
     <div class="toolbar" style="margin:0"><label class="btn ${S.finalMode?"":"primary"}" style="cursor:pointer;position:relative">${busy?"Membaca berkas…":S.finalMode?"Ganti artikel final":"Pilih artikel final (.docx / .pdf)"}<input type="file" id="ceFinalIn" accept=".docx,.pdf,.txt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf,text/plain" style="position:absolute;inset:0;opacity:0;cursor:pointer" ${busy?"disabled":""}></label>
       ${S.finalMode&&S.doc?`<span class="small">✓ <b>${esc(S.doc.name)}</b> diekstrak. Isi volume, nomor, register, dan halaman di bawah, periksa pratinjau, lalu tekan <b>Unduh artikel sesuai template</b>.</span>`:`<span class="small muted">.docx paling akurat (gambar dan tabel ikut terbawa).</span>`}</div>
+    ${S.ce&&S.ce.E?ceLinkBox():""}
     ${S.ceUpErr?`<div class="upstate err" role="alert" style="margin-top:10px">${icon(IC.warn)}<div>${esc(S.ceUpErr)}</div></div>`:""}</div>`;
 }
 
@@ -4646,7 +4656,7 @@ function render(){
   try{ recalcLocal(); }catch(e){ console.warn(e); }
   if (!S.doc && !["admin","banding","nor","copyedit"].includes(S.view)) S.view="unggah";
   renderNav();
-  const needsLocal = !["unggah","chat","admin","banding","nor"].includes(S.view) && !(S.view==="copyedit" && (S.finalMode || !S.doc));
+  const needsLocal = !["unggah","chat","admin","banding","nor"].includes(S.view) && !(S.view==="copyedit" && (S.finalMode || !S.doc)) && !(S.view==="ojs" && S.finalMode);
   const staging = S.doc && !S.local && needsLocal;
   const [t,sub] = staging ? ["Mulai Analisis","Naskah sudah dimuat"] : viewMeta(S.view);
   $("#vtitle").textContent = t; $("#vsub").textContent = sub;
@@ -4682,7 +4692,7 @@ function gotoPara(i){
 function invalidate(){ S.excl=new Set(); if (S.inst&&S.inst.ctl) S.inst.ctl.abort(); S.inst=null; if (S.gram&&S.gram.ctl) S.gram.ctl.abort(); S.gram=null; S.aicheck=null; if (S.sim){ if (S.sim.ctl) S.sim.ctl.abort(); S.sim.rows=null; } S.ce=null; S.local=null; S.rev=null; S.revSel=null; S.ai=null; S.aiErr=""; S.filter={}; S.babSel="all"; }
 function setDoc(doc){
   if (S.aiCtl) S.aiCtl.abort();
-  S.doc = doc; invalidate(); S.chat=[]; S.finalMode=false; if (S.adm){ S.adm.filled=false; S.adm.reg=""; S.adm.doi=""; S.adm.nomor=""; S.adm.noart=""; }
+  S.doc = doc; invalidate(); S.chat=[]; S.finalMode=false; if (S.ojs) S.ojs = {src:"", ed:{}, busy:false, err:"", trMode:S.ojs.trMode||"auto", tr:{key:"", busy:false, err:"", data:null}}; S.ojsWiz=null; if (S.adm){ S.adm.filled=false; S.adm.reg=""; S.adm.doi=""; S.adm.nomor=""; S.adm.noart=""; }
   if (doc.jenis){ S.jenis=doc.jenis; $("#selJenis").value=doc.jenis; }
   if (doc.tahap){ S.tahap=doc.tahap; $("#selTahap").value=doc.tahap; }
 }
@@ -4928,6 +4938,7 @@ async function exportReport(){
 document.addEventListener("click", e=>{
   const b = e.target.closest("button"); if(!b || b.disabled) return;
   if (b.id==="btnReset") return resetAll();
+  if (b.dataset.norgo){ const [st,v]=b.dataset.norgo.split(":"); S.norStage=st; if (v==="ojs" && S.ce && S.ce.E) ojsState().src=S.ce.src; return go(v); }
   if (b.dataset.norstage){ S.norStage=b.dataset.norstage; return go("nor"); }
   if (b.dataset.view) return go(b.dataset.view);
   if (b.dataset.goto!=null) return gotoPara(+b.dataset.goto);
