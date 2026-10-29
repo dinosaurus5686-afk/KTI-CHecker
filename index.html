@@ -2544,7 +2544,7 @@ function vAdmin(){
         <div class="grid" style="gap:10px">${inp("nomor","Nomor surat","mis. 123/NOR/VII/2026","text","c6")}${inp("noart","No. Artikel (kolom samping)",A.reg?`otomatis: ${A.reg}`:"28618","text","c6")}${inp("vol","Volume","13","text","c4")}${inp("no","Nomor","4","text","c4")}${inp("tahun","Tahun","2026","text","c4")}${inp("reg","Nomor register","28618","text","c6")}${inp("tgl","Tanggal tanda tangan","","date","c6")}${doiLiveBox("DOI (barcode) — otomatis dari volume, nomor, dan nomor register")}${inp("doi","DOI manual (opsional; kosongkan agar otomatis)","","text","c12")}</div>
         <dl class="kv" style="margin-top:12px"><dt>No. Artikel (kolom samping)</dt><dd>#${esc(admNoArtikel(A)||"—")}</dd><dt>Diterima pada</dt><dd>Volume ${esc(A.vol||"…")} Nomor ${esc(A.no||"…")} Tahun ${esc(A.tahun||"…")}</dd><dt>Tanda tangan</dt><dd>Kediri, ${esc(tglIndo(A.tgl))}</dd><dt>Barcode DOI</dt><dd style="word-break:break-all">${esc(doi||"—")}</dd></dl>
         <p class="small muted" style="margin:10px 0">Barcode DOI dibuat sebagai gambar (Code 128) sehingga tampil dan bisa dipindai di komputer mana pun tanpa font tambahan.</p>${S.admWarn==="loa"&&admMissing(A,"loa").length?`<p class="small" style="margin:0 0 10px;color:var(--bad,#c0392b)">Belum diisi: ${esc(admMissing(A,"loa").join(", "))}.</p>`:""}
-        <button class="btn primary" data-act="admloa">Unduh LOA (.docx)</button></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="admloa">Unduh LOA (.docx)</button><button class="btn primary" data-act="admloapdf">Unduh LOA (.pdf)</button></div></div>
       <div class="card c6"><h3>${A.invJenis==="akhir"?"Invoice":"Invoice deposit"}${A.paid?'<span class="r" style="color:#c62828;font-weight:900;letter-spacing:.12em;border:2px solid #c62828;border-radius:6px;padding:0 6px;transform:rotate(-6deg)">PAID</span>':""}</h3>
         <div class="toolbar" style="margin-bottom:8px"><span class="small muted">Jenis tagihan:</span><div class="seg" role="group">${Object.entries(INV_JENIS).map(([k,v])=>`<button aria-pressed="${A.invJenis===k}" data-invjenis="${k}">${v}</button>`).join("")}</div></div>
         <p class="small muted" style="margin:0 0 10px">${A.invJenis==="akhir"?"Dikirim di akhir, setelah naskah diputuskan layak publish: “…telah dilakukan review… dan diputuskan layak publish. Proses selanjutnya adalah proses publikasi… pembayaran biaya editorial dan publikasi…”":"Dikirim di awal, setelah review awal: “…telah dilakukan review awal… memiliki potensi layak publish… pembayaran deposit untuk mengoptimalkan proses publikasi…”"}</p>
@@ -2557,7 +2557,8 @@ function vAdmin(){
         </tbody></table></div>
         <p class="small" style="margin:8px 0 12px"><b>Terbilang:</b> “${esc(kapital(terbilang(total)))} Rupiah”</p>
         <p class="small muted" style="margin:0 0 12px">Judul pada invoice: “${esc(A.judul||"—")}”</p>
-        <div class="small muted" style="margin:0 0 8px">Cetak ${A.invJenis==="akhir"?"invoice":"invoice deposit"}${A.paid?" dengan cap PAID":""} (.docx):</div><div style="display:flex;gap:8px;flex-wrap:wrap">${Object.entries(PAKET).map(([k,v])=>`<button class="btn ${A.paket===k?"primary":""}" data-act="adminv" data-pk="${k}">Paket ${v.label}</button>`).join("")}</div></div>
+        <div class="small muted" style="margin:0 0 8px">Cetak ${A.invJenis==="akhir"?"invoice":"invoice deposit"}${A.paid?" dengan cap PAID":""} (.docx):</div><div style="display:flex;gap:8px;flex-wrap:wrap">${Object.entries(PAKET).map(([k,v])=>`<button class="btn ${A.paket===k?"primary":""}" data-act="adminv" data-pk="${k}">Paket ${v.label}</button>`).join("")}</div>
+        <div class="small muted" style="margin:12px 0 8px">Cetak ${A.invJenis==="akhir"?"invoice":"invoice deposit"}${A.paid?" dengan cap PAID":""} (.pdf, satu halaman siap kirim):</div><div style="display:flex;gap:8px;flex-wrap:wrap">${Object.entries(PAKET).map(([k,v])=>`<button class="btn ${A.paket===k?"primary":""}" data-act="adminvpdf" data-pk="${k}">PDF ${v.label}</button>`).join("")}</div></div>
     </section>`;
 }
 
@@ -4372,6 +4373,128 @@ async function norPageFurniture(zip, E, meta){
   const sx = zip.file("word/settings.xml"); if (sx){ let s = await sx.async("string"); if (!/<w:evenAndOddHeaders/.test(s)) s = /<w:compat\b/.test(s) ? s.replace(/<w:compat\b/, "<w:evenAndOddHeaders/><w:compat") : s.replace(/(<w:settings\b[^>]*>)/, "$1<w:evenAndOddHeaders/>"); zip.file("word/settings.xml", s); }
 }
 
+/* ═════════════ LOA & INVOICE → PDF SATU HALAMAN ═════════════ */
+// gambar dari templat .docx (logo, ISSN, perangkat, tanda tangan) → data URL PNG
+async function admImages(id){
+  S._admImg = S._admImg || {}; if (S._admImg[id]) return S._admImg[id];
+  const zip = await JSZip.loadAsync(tplBytesOf(id));
+  const rels = await zip.file("word/_rels/document.xml.rels").async("string"); const doc = await zip.file("word/document.xml").async("string");
+  const tgt = {}; for (const m of rels.matchAll(/Id="(\w+)"[^>]*Target="media\/([^"]+)"/g)) tgt[m[1]] = m[2];
+  const order = [...doc.matchAll(/r:embed="(\w+)"/g)].map(m=>tgt[m[1]]).filter(Boolean);
+  const toPng = async f => { const b = await zip.file("word/media/"+f).async("blob"); const bmp = await createImageBitmap(b); const cv=document.createElement("canvas"); cv.width=bmp.width; cv.height=bmp.height; const g=cv.getContext("2d"); g.drawImage(bmp,0,0); return {url:cv.toDataURL("image/png"), w:bmp.width, h:bmp.height}; };
+  const out = {};
+  for (const f of [...new Set(order)]){ const im = await toPng(f); const r = im.w/im.h;
+    if (/\.gif$/i.test(f)) out.ttd = im; else if (im.w===im.h) out.logo = im; else if (im.w<200) (out.issn = out.issn||[]).push(im); else out.device = im; }
+  return (S._admImg[id] = out);
+}
+const bytesUrl = (u8, mime="image/png") => { let s=""; for (let i=0;i<u8.length;i+=8192) s+=String.fromCharCode.apply(null, u8.subarray(i,i+8192)); return `data:${mime};base64,${btoa(s)}`; };
+// teks kaya (tebal per bagian) dengan bungkus baris dan rata kanan-kiri
+function pdfRich(doc, segs, x, y, w, o={}){
+  const size=o.size||10.5, lh=o.lh||size*1.42; const words=[];
+  segs.forEach(s=>pdfSafe(s.t).split(/(\s+)/).forEach(p=>{ if (p==="") return; if (/^\s+$/.test(p)) words.push({sp:true}); else words.push({t:p, b:!!s.b}); }));
+  const wOf = wd => { doc.setFont("helvetica", wd.b?"bold":"normal"); doc.setFontSize(size); return doc.getTextWidth(wd.t); };
+  const spW = (doc.setFont("helvetica","normal"), doc.setFontSize(size), doc.getTextWidth(" "));
+  const lines=[]; let cur=[], cw=0;
+  words.forEach(wd=>{ if (wd.sp){ if (cur.length) cur.push(wd); return; } const ww=wOf(wd); const add = cur.length && !cur[cur.length-1].sp ? 0 : 0; const sp = cur.length ? spW : 0;
+    if (cur.length && cw + sp + ww > w){ while (cur.length && cur[cur.length-1].sp) cur.pop(); lines.push(cur); cur=[]; cw=0; }
+    if (cur.length && !cur[cur.length-1].sp) { /* kata menempel tanpa spasi */ } cur.push(wd); cw += (cur.length>1 && cur[cur.length-2].sp ? spW : 0) + ww + add; });
+  while (cur.length && cur[cur.length-1].sp) cur.pop(); if (cur.length) lines.push(cur);
+  lines.forEach((ln,li)=>{ const toks=ln.filter(t=>!t.sp); const gaps=ln.filter(t=>t.sp).length; const tw=toks.reduce((a,t)=>a+wOf(t),0);
+    const last = li===lines.length-1; const al = o.align||"left";
+    let gap = spW, xx = x;
+    if (al==="justify" && !last && gaps) gap = (w - tw)/gaps; else if (al==="center") xx = x + (w - tw - gaps*spW)/2; else if (al==="right") xx = x + w - tw - gaps*spW;
+    ln.forEach(t=>{ if (t.sp){ xx+=gap; return; } doc.setFont("helvetica", t.b?"bold":"normal"); doc.setFontSize(size); doc.text(t.t, xx, y); xx += wOf(t); });
+    y += lh; });
+  return y;
+}
+const NOR_SIDE = {loa:"333333", inv:"501549"};
+async function admPdfFrame(doc, kind){
+  const A=admState(); const im = await admImages(kind==="loa"?"tplLOA":"tplINV");
+  const PW=612, X0=36, Y0=36, SW=143, SH=720;
+  doc.setFillColor(...hexRgb(NOR_SIDE[kind])); doc.rect(X0, Y0, SW, SH, "F");
+  [["C00000",0,.2],["00B0F0",.2,.55],["F79646",.55,.67],["92D050",.67,1]].forEach(([c,a,b])=>{ doc.setFillColor(...hexRgb(c)); doc.rect(X0+SW, Y0+SH*a, 5, SH*(b-a), "F"); });
+  doc.setTextColor(255,255,255); let y=Y0+14;
+  if (kind==="loa"){ doc.setFont("helvetica","normal"); doc.setFontSize(7.5); const t1="No Artikel #"; doc.text(t1, X0+12, y); const w1=doc.getTextWidth(t1); doc.setFont("helvetica","bold"); doc.setFontSize(9.5); doc.text(pdfSafe(admNoArtikel(A)||"-"), X0+12+w1+1, y); }
+  if (im.logo) doc.addImage(im.logo.url, "PNG", X0+(SW-104)/2, Y0+20, 104, 104);
+  y = Y0+138; const tx=X0+12, tw=SW-22;
+  const blk = (head, body, sz=8.5) => { if (head){ doc.setFont("helvetica","bold"); doc.setFontSize(sz); doc.text(head, tx, y); y+=sz*1.3; } doc.setFont("helvetica","normal"); doc.setFontSize(sz); doc.splitTextToSize(body, tw).forEach(l=>{ doc.text(l, tx, y); y+=sz*1.3; }); y+=6; };
+  blk("Pengelola:", "Program Studi Bimbingan dan Konseling"); blk("Penerbit:", "Lembaga Penelitian dan Pengabdian Kepada Masyarakat");
+  doc.setFont("helvetica","bold"); doc.setFontSize(10.5); doc.splitTextToSize("Universitas Nusantara PGRI Kediri", tw).forEach(l=>{ doc.text(l, tx, y); y+=13; }); y+=4;
+  blk("", "Jl. KH. Ahmad Dahlan No. 76, Kota Kediri 64112", 7.5); blk("", "Phone [0354-771576]\nFax [771503]\n[jurnal.nor2014@gmail.com]", 7.5);
+  blk("Principal Contact:", "Guruh Sukma Hanggara\nWA [085233036100]\n[kangguruh@unpkediri.ac.id]", 7.5);
+  y += 6; (im.issn||[]).slice(0,2).forEach((b,i)=>{ doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.text(i?"P-ISSN:":"E-ISSN:", tx, y); y+=4; doc.setFillColor(255,255,255); doc.rect(tx, y, 68, 46, "F"); doc.addImage(b.url, "PNG", tx, y, 68, 46); y+=58; });
+  if (im.device){ const w=118, h=w*im.device.h/im.device.w; doc.addImage(im.device.url, "PNG", X0+(SW-w)/2, Y0+SH-h-10, w, h); }
+  // kop di kolom kanan
+  const RX=200, RW=PW-36-RX; doc.setTextColor(0,0,0);
+  let ry = Y0+10; doc.setFont("helvetica","bold"); doc.setFontSize(11.5);
+  doc.splitTextToSize("Nusantara of Research: Jurnal Hasil-hasil Penelitian Universitas Nusantara PGRI Kediri", RW).forEach(l=>{ doc.text(l, RX, ry); ry+=14; });
+  doc.setFont("helvetica","normal"); doc.setFontSize(8);
+  ["Pengelola: Program Studi Bimbingan dan Konseling","Gedung D1, Kampus 1, Universitas Nusantara PGRI Kediri","Jl. KH. Ahmad Dahlan No. 76, Kota Kediri 64112, Telp. (0354) 771576, Fax. 771503","http://ojs.unpkediri.ac.id/index.php/efektor, e-mail: jurnal.nor2014@gmail.com"].forEach(l=>{ doc.text(l, RX, ry); ry+=10.5; });
+  ry+=3; doc.setDrawColor(...hexRgb(NOR_SIDE[kind])); doc.setLineWidth(1.6); doc.line(RX, ry, RX+RW, ry); doc.setLineWidth(0.5); doc.line(RX, ry+3, RX+RW, ry+3);
+  return {RX, RW, y: ry+26, im};
+}
+function admPdfSign(doc, F, y, tgl){
+  const cx = F.RX + F.RW - 95; doc.setFont("helvetica","normal"); doc.setFontSize(10.5); doc.setTextColor(0,0,0);
+  doc.text(pdfSafe("Kediri, "+tgl), cx, y, {align:"center"}); doc.text("Ketua Dewan Redaksi,", cx, y+14, {align:"center"});
+  if (F.im.ttd){ const w=140, h=w*F.im.ttd.h/F.im.ttd.w; doc.addImage(F.im.ttd.url, "PNG", cx-w/2, y+18, w, h); }
+  doc.setFont("helvetica","bold"); doc.text("Guruh Sukma Hanggara, M.Pd", cx, y+102, {align:"center"});
+  doc.setFont("helvetica","normal"); doc.text("NIDN. 0705068606", cx, y+116, {align:"center"});
+  return cx;
+}
+async function buildLOAPdf(){
+  const A=admState(); const doi=admDOI(A); const doc=new window.jspdf.jsPDF({unit:"pt", format:"letter"});
+  const F = await admPdfFrame(doc, "loa"); let y=F.y; const {RX,RW}=F; const fs=10.5;
+  [["Nomor", A.nomor||"", false],["Hal","Letter of Acceptance (LOA)", true],["Lampiran","1 Lembar", false]].forEach(([k,v,b])=>{ doc.setFont("helvetica","normal"); doc.setFontSize(fs); doc.text(k, RX, y); doc.text(":", RX+52, y); doc.setFont("helvetica", b?"bold":"normal"); doc.text(pdfSafe(v), RX+60, y); y+=15; });
+  y+=12; y = pdfRich(doc, [{t:"Yang bertanda tangan di bawah ini, Ketua Dewan Redaksi Nusantara of Research: Jurnal Hasil-hasil Penelitian Universitas Nusantara PGRI Kediri, menerangkan bahwa:"}], RX, y, RW, {align:"justify"});
+  y+=6; const LW=106;
+  [["Judul Artikel", A.judul],["Nama Penulis", A.penulis],["Email Koresponden", A.email],["Nomor Register", A.reg]].forEach(([k,v])=>{ doc.setFont("helvetica","normal"); doc.setFontSize(fs); doc.text(k, RX+8, y); doc.text(":", RX+LW, y); const ls=doc.splitTextToSize(pdfSafe(v||"-"), RW-LW-16); doc.setFont("helvetica", k==="Judul Artikel"?"bold":"normal"); ls.forEach((l,i)=>doc.text(l, RX+LW+8, y+i*14)); y+=Math.max(1,ls.length)*14+3; });
+  y+=8; y = pdfRich(doc, [{t:"Telah dinyatakan "},{t:"diterima",b:true},{t:" dan akan dimuat pada "},{t:`Nusantara of Research: Jurnal Hasil-hasil Penelitian Universitas Nusantara PGRI Kediri, Volume ${A.vol||"…"} Nomor ${A.no||"…"} Tahun ${A.tahun||"…"}.`,b:true}], RX, y, RW, {align:"justify"});
+  y+=8; y = pdfRich(doc, [{t:"Demikian surat keterangan ini dibuat untuk digunakan semestinya. Atas perhatian dan kerja samanya disampaikan terima kasih."}], RX, y, RW, {align:"justify"});
+  const sy = Math.max(y+22, 560); admPdfSign(doc, F, sy, tglIndo(A.tgl));
+  if (doi){ const bc = await barcodePNG(doi); const w=170, h=34; doc.addImage(bytesUrl(bc.bytes), "PNG", RX, sy+58, w, h); doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.text(doi, RX+w/2, sy+100, {align:"center"}); doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.text("DOI", RX, sy+52); }
+  return doc.output("blob");
+}
+async function buildInvoicePdf(paket){
+  const A=admState(); paket=paket||A.paket; const P=PAKET[paket]; const total=P.items.reduce((a,x)=>a+x[1],0); const akhir=A.invJenis==="akhir";
+  const doc=new window.jspdf.jsPDF({unit:"pt", format:"letter"}); const F = await admPdfFrame(doc, "inv"); let y=F.y; const {RX,RW}=F;
+  doc.setFont("helvetica","bold"); doc.setFontSize(14); doc.text(akhir?"INVOICE":"INVOICE DEPOSIT", RX+RW/2, y, {align:"center"}); y+=26;
+  doc.setFontSize(10.5); doc.setFont("helvetica","normal");
+  y = pdfRich(doc, [{t:"Yth. "},{t:A.penulis||"Penulis",b:true}], RX, y, RW); ["Nusantara of Research: Jurnal Hasil-hasil Penelitian","Universitas Nusantara PGRI Kediri"].forEach(l=>{ doc.setFont("helvetica","normal"); doc.text(l, RX, y); y+=14.9; });
+  y+=10; doc.text("Dengan hormat,", RX, y); y+=18;
+  const judul = `“${A.judul||"Judul Artikel"}”`;
+  y = pdfRich(doc, akhir
+    ? [{t:"Diberitahukan bahwa telah dilakukan review pada artikel dengan judul "},{t:judul,b:true},{t:" dan diputuskan layak publish. Proses selanjutnya adalah proses publikasi. Sehubungan dengan hal tersebut dimohon untuk melakukan pembayaran biaya editorial dan publikasi, yaitu sebesar:"}]
+    : [{t:"Diberitahukan bahwa telah dilakukan review awal pada artikel dengan judul "},{t:judul,b:true},{t:" dan diputuskan memiliki potensi layak publish. Proses selanjutnya adalah proses review, editorial dan publikasi. Sehubungan dengan hal tersebut dimohon untuk melakukan pembayaran deposit untuk mengoptimalkan proses publikasi, yaitu sebesar:"}], RX, y, RW, {align:"justify"});
+  y+=4;
+  const head = ["No","Uraian Layanan"].concat(P.kode?["Kode"]:[]).concat(["Jumlah (Rp)"]);
+  const body = P.items.map((it,i)=>[String(i+1), pdfSafe(it[0])].concat(P.kode?[""]:[]).concat([rupiah(it[1])]));
+  const nC = head.length; const lastI = nC-1;
+  doc.autoTable({startY:y, margin:{left:RX, right:612-RX-RW}, tableWidth:RW, head:[head], body,
+    foot:[[{content:"Total:", colSpan:nC-1, styles:{halign:"right"}}, rupiah(total)], [{content:"Terbilang:", colSpan:nC-1, styles:{halign:"right"}}, pdfSafe(`“${kapital(terbilang(total))} Rupiah”`)]],
+    theme:"plain", styles:{font:"helvetica", fontSize:10, cellPadding:{top:3,bottom:3,left:5,right:5}, textColor:[0,0,0], lineColor:[0,0,0]},
+    headStyles:{fillColor:[191,191,191], fontStyle:"bold"}, footStyles:{fontStyle:"bold", fillColor:[255,255,255]},
+    columnStyles: Object.assign({0:{cellWidth:28}}, P.kode?{2:{cellWidth:60}}:{}, {[lastI]:{halign:"right", cellWidth:160}}),
+    didParseCell: d=>{ if ((d.section==="head"||d.section==="foot") && d.column.index===lastI) d.cell.styles.halign="right"; },
+    didDrawCell: d=>{ if (d.section==="body"||d.section==="head"){ doc.setDrawColor(0,0,0); doc.setLineWidth(0.5); doc.line(d.cell.x, d.cell.y+d.cell.height, d.cell.x+d.cell.width, d.cell.y+d.cell.height); } }});
+  y = doc.lastAutoTable.finalY + 18;
+  y = pdfRich(doc, [{t:"ke Rekening "},{t:"BSI",b:true},{t:" (Bank Syariah Indonesia), "},{t:"No Rek. 1025376036",b:true},{t:" a.n "},{t:"Guruh Sukma Hanggara.",b:true}], RX, y, RW);
+  y+=6; y = pdfRich(doc, [{t:"Demikian Pemberitahuan Kami, Atas Kerja Sama dan Tindak Lanjutnya Kami Menyampaikan Terima Kasih."}], RX, y, RW, {align:"justify"});
+  const sy = Math.max(y+22, 580); admPdfSign(doc, F, sy, tglIndo(A.tglInv));
+  if (A.paid){ const st = await paidStampPNG(tglIndo(A.tglBayar||A.tglInv)||tglIndo(isoToday())); const w=170, h=w*st.h/st.w; doc.addImage(bytesUrl(st.bytes), "PNG", RX+4, sy+8, w, h); }
+  return doc.output("blob");
+}
+async function admDownloadPdf(kind, paket){
+  const A=admState(); paket=paket||A.paket;
+  const miss=admMissing(A, kind); if (miss.length){ S.admWarn=kind; render(); return toast("Lengkapi dulu: "+miss.join(", ")+"."); }
+  S.admWarn="";
+  try{
+    if (!window.jspdf || !window.jspdf.jsPDF) throw new Error("Pustaka PDF gagal dimuat. Periksa koneksi internet lalu muat ulang halaman.");
+    const blob = kind==="loa" ? await buildLOAPdf() : await buildInvoicePdf(paket);
+    const nm = (A.reg||baseName()).toString().replace(/[^\w\-]+/g,"_");
+    await saveFile(kind==="loa" ? `LOA_${nm}.pdf` : `${A.invJenis==="akhir"?"Invoice":"Invoice_Deposit"}_${PAKET[paket].label}_${nm}${A.paid?"_PAID":""}.pdf`, blob, kind==="loa" ? "LOA (PDF) disimpan." : "Invoice (PDF) disimpan.");
+  }catch(e){ console.error(e); toast("PDF gagal dibuat: "+(e.message||e)); }
+}
+
 /* ═════════════ RUN ═════════════ */
 const WEIGHTS = {struktur:{e:5,w:2,cap:25},isi:{e:3,w:1,cap:15},abstrak:{e:3,w:1.5,cap:12},bahasa:{e:1.5,w:.5,cap:12},sitasi:{e:2,w:1,cap:16},visual:{e:2,w:1,cap:8},format:{e:3,w:1.5,cap:12}};
 const STEPS = ["Membaca susunan bab dan sub-bab","Memeriksa isi setiap bab","Memeriksa abstrak dan kata kunci","Memeriksa ejaan dan diksi","Mencocokkan sitasi dengan daftar pustaka","Memeriksa tabel, gambar, dan format"];
@@ -5058,6 +5181,8 @@ document.addEventListener("click", e=>{
   if (a==="rvall") return reviewDownloadAll();
   if (a==="rvrpt") return reviewDownload("rpt");
   if (a==="admloa") return admDownload("loa");
+  if (a==="admloapdf") return admDownloadPdf("loa");
+  if (a==="adminvpdf") return admDownloadPdf("inv", b.dataset.pk);
   if (a==="adminv") return admDownload("inv", b.dataset.pk);
   if (a==="cedownload") return ceDownload();
   if (a==="cestop") return S.ce && S.ce.ctl && S.ce.ctl.abort();
