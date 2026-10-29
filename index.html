@@ -4413,25 +4413,29 @@ async function admPdfFrame(doc, kind){
   const PW=612, X0=36, Y0=36, SW=143, SH=720;
   doc.setFillColor(...hexRgb(NOR_SIDE[kind])); doc.rect(X0, Y0, SW, SH, "F");
   [["C00000",0,.2],["00B0F0",.2,.55],["F79646",.55,.67],["92D050",.67,1]].forEach(([c,a,b])=>{ doc.setFillColor(...hexRgb(c)); doc.rect(X0+SW, Y0+SH*a, 5, SH*(b-a), "F"); });
-  doc.setTextColor(255,255,255); let y=Y0+14;
-  if (kind==="loa"){ doc.setFont("helvetica","normal"); doc.setFontSize(7.5); const t1="No Artikel #"; doc.text(t1, X0+12, y); const w1=doc.getTextWidth(t1); doc.setFont("helvetica","bold"); doc.setFontSize(9.5); doc.text(pdfSafe(admNoArtikel(A)||"-"), X0+12+w1+1, y); }
-  if (im.logo) doc.addImage(im.logo.url, "PNG", X0+(SW-104)/2, Y0+20, 104, 104);
-  y = Y0+138; const tx=X0+12, tw=SW-22;
+  doc.setTextColor(255,255,255); let y;
+  if (im.logo) doc.addImage(im.logo.url, "PNG", X0+(SW-120)/2-4, Y0, 120, 120);
+  y = Y0+138; const tx=X0+14, tw=SW-24;
   const blk = (head, body, sz=8.5) => { if (head){ doc.setFont("helvetica","bold"); doc.setFontSize(sz); doc.text(head, tx, y); y+=sz*1.3; } doc.setFont("helvetica","normal"); doc.setFontSize(sz); doc.splitTextToSize(body, tw).forEach(l=>{ doc.text(l, tx, y); y+=sz*1.3; }); y+=6; };
-  blk("Pengelola:", "Program Studi Bimbingan dan Konseling"); blk("Penerbit:", "Lembaga Penelitian dan Pengabdian Kepada Masyarakat");
+  doc.setTextColor(255,255,255); y = pdfRich(doc, [{t:"Pengelola: ",b:true},{t:"Program Studi Bimbingan dan Konseling"}], tx, y, tw, {size:9, lh:11.5}) + 8;
+  doc.setTextColor(255,255,255); y = pdfRich(doc, [{t:"Penerbit: ",b:true},{t:"Lembaga Penelitian dan Pengabdian Kepada Masyarakat"}], tx, y, tw, {size:9, lh:11.5}) + 8; doc.setTextColor(255,255,255);
   doc.setFont("helvetica","bold"); doc.setFontSize(10.5); doc.splitTextToSize("Universitas Nusantara PGRI Kediri", tw).forEach(l=>{ doc.text(l, tx, y); y+=13; }); y+=4;
   blk("", "Jl. KH. Ahmad Dahlan No. 76, Kota Kediri 64112", 7.5); blk("", "Phone [0354-771576]\nFax [771503]\n[jurnal.nor2014@gmail.com]", 7.5);
   blk("Principal Contact:", "Guruh Sukma Hanggara\nWA [085233036100]\n[kangguruh@unpkediri.ac.id]", 7.5);
   y += 6; (im.issn||[]).slice(0,2).forEach((b,i)=>{ doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.text(i?"P-ISSN:":"E-ISSN:", tx, y); y+=4; doc.setFillColor(255,255,255); doc.rect(tx, y, 68, 46, "F"); doc.addImage(b.url, "PNG", tx, y, 68, 46); y+=58; });
-  if (im.device){ const w=118, h=w*im.device.h/im.device.w; doc.addImage(im.device.url, "PNG", X0+(SW-w)/2, Y0+SH-h-10, w, h); }
+  const nY = Y0+SH-16; // nomor artikel di ujung bawah panel
+  if (im.device){ const w=112, h=w*im.device.h/im.device.w; doc.addImage(im.device.url, "PNG", tx-2, nY-h-14, w, h); }
+  if (kind==="loa"){ doc.setTextColor(255,255,255); doc.setFont("helvetica","normal"); doc.setFontSize(8); const t1="No Artikel #"; doc.text(t1, tx, nY); const w1=doc.getTextWidth(t1); doc.setFont("helvetica","bold"); doc.setFontSize(9.5); doc.text(pdfSafe(admNoArtikel(A)||"-"), tx+w1+1, nY); }
   // kop di kolom kanan
   const RX=200, RW=PW-36-RX; doc.setTextColor(0,0,0);
-  let ry = Y0+10; doc.setFont("helvetica","bold"); doc.setFontSize(11.5);
-  doc.splitTextToSize("Nusantara of Research: Jurnal Hasil-hasil Penelitian Universitas Nusantara PGRI Kediri", RW).forEach(l=>{ doc.text(l, RX, ry); ry+=14; });
-  doc.setFont("helvetica","normal"); doc.setFontSize(8);
-  ["Pengelola: Program Studi Bimbingan dan Konseling","Gedung D1, Kampus 1, Universitas Nusantara PGRI Kediri","Jl. KH. Ahmad Dahlan No. 76, Kota Kediri 64112, Telp. (0354) 771576, Fax. 771503","http://ojs.unpkediri.ac.id/index.php/efektor, e-mail: jurnal.nor2014@gmail.com"].forEach(l=>{ doc.text(l, RX, ry); ry+=10.5; });
-  ry+=3; doc.setDrawColor(...hexRgb(NOR_SIDE[kind])); doc.setLineWidth(1.6); doc.line(RX, ry, RX+RW, ry); doc.setLineWidth(0.5); doc.line(RX, ry+3, RX+RW, ry+3);
-  return {RX, RW, y: ry+26, im};
+  // kop dalam bingkai
+  const KX=RX, KW=RW-28, pad=8; let ry = Y0+6+pad+11; doc.setFont("helvetica","bold"); doc.setFontSize(12.5);
+  doc.splitTextToSize("Nusantara of Research: Jurnal Hasil-hasil Penelitian Universitas Nusantara PGRI Kediri", KW-pad*2).forEach(l=>{ doc.text(l, KX+pad, ry); ry+=15; });
+  doc.setFont("times","bolditalic"); doc.setFontSize(11); doc.text("Pengelola: Program Studi Bimbingan dan Konseling", KX+pad, ry); ry+=12;
+  doc.setFont("helvetica","normal"); doc.setFontSize(7.8);
+  ["Gedung D1, Kampus 1, Universitas Nusantara PGRI Kediri","Jl. KH. Ahmad Dahlan No. 76, Kota Kediri 64112, Telp. (0354) 771576, Fax. 771503","http://ojs.unpkediri.ac.id/index.php/efektor, e-mail: jurnal.nor2014@gmail.com"].forEach(l=>{ doc.text(l, KX+pad, ry); ry+=10; });
+  doc.setDrawColor(0,0,0); doc.setLineWidth(0.9); doc.rect(KX, Y0+6, KW, ry-(Y0+6)+2);
+  return {RX, RW, y: ry+34, im, bottom: nY};
 }
 function admPdfSign(doc, F, y, tgl){
   const cx = F.RX + F.RW - 95; doc.setFont("helvetica","normal"); doc.setFontSize(10.5); doc.setTextColor(0,0,0);
@@ -4447,11 +4451,12 @@ async function buildLOAPdf(){
   [["Nomor", A.nomor||"", false],["Hal","Letter of Acceptance (LOA)", true],["Lampiran","1 Lembar", false]].forEach(([k,v,b])=>{ doc.setFont("helvetica","normal"); doc.setFontSize(fs); doc.text(k, RX, y); doc.text(":", RX+52, y); doc.setFont("helvetica", b?"bold":"normal"); doc.text(pdfSafe(v), RX+60, y); y+=15; });
   y+=12; y = pdfRich(doc, [{t:"Yang bertanda tangan di bawah ini, Ketua Dewan Redaksi Nusantara of Research: Jurnal Hasil-hasil Penelitian Universitas Nusantara PGRI Kediri, menerangkan bahwa:"}], RX, y, RW, {align:"justify"});
   y+=6; const LW=106;
-  [["Judul Artikel", A.judul],["Nama Penulis", A.penulis],["Email Koresponden", A.email],["Nomor Register", A.reg]].forEach(([k,v])=>{ doc.setFont("helvetica","normal"); doc.setFontSize(fs); doc.text(k, RX+8, y); doc.text(":", RX+LW, y); const ls=doc.splitTextToSize(pdfSafe(v||"-"), RW-LW-16); doc.setFont("helvetica", k==="Judul Artikel"?"bold":"normal"); ls.forEach((l,i)=>doc.text(l, RX+LW+8, y+i*14)); y+=Math.max(1,ls.length)*14+3; });
+  [["Judul Artikel", A.judul],["Nama Penulis", A.penulis],["Email Koresponden", A.email],["Nomor Register", A.reg]].forEach(([k,v])=>{ doc.setFont("helvetica","normal"); doc.setFontSize(fs); doc.text(k, RX+8, y); doc.text(":", RX+LW, y); const ls=doc.splitTextToSize(pdfSafe(v||"-"), RW-LW-16); const mail = k==="Email Koresponden" && v; doc.setFont("helvetica", k==="Judul Artikel"?"bold":"normal"); if (mail) doc.setTextColor(17,85,204); ls.forEach((l,i)=>{ doc.text(l, RX+LW+8, y+i*14); if (mail){ doc.setDrawColor(17,85,204); doc.setLineWidth(0.5); doc.line(RX+LW+8, y+i*14+1.5, RX+LW+8+doc.getTextWidth(l), y+i*14+1.5); } }); doc.setTextColor(0,0,0); y+=Math.max(1,ls.length)*14+3; });
   y+=8; y = pdfRich(doc, [{t:"Telah dinyatakan "},{t:"diterima",b:true},{t:" dan akan dimuat pada "},{t:`Nusantara of Research: Jurnal Hasil-hasil Penelitian Universitas Nusantara PGRI Kediri, Volume ${A.vol||"…"} Nomor ${A.no||"…"} Tahun ${A.tahun||"…"}.`,b:true}], RX, y, RW, {align:"justify"});
   y+=8; y = pdfRich(doc, [{t:"Demikian surat keterangan ini dibuat untuk digunakan semestinya. Atas perhatian dan kerja samanya disampaikan terima kasih."}], RX, y, RW, {align:"justify"});
-  const sy = Math.max(y+22, 560); admPdfSign(doc, F, sy, tglIndo(A.tgl));
-  if (doi){ const bc = await barcodePNG(doi); const w=170, h=34; doc.addImage(bytesUrl(bc.bytes), "PNG", RX, sy+58, w, h); doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.text(doi, RX+w/2, sy+100, {align:"center"}); doc.setFontSize(8); doc.setFont("helvetica","bold"); doc.text("DOI", RX, sy+52); }
+  const sy = Math.max(y+40, 540); admPdfSign(doc, F, sy, tglIndo(A.tgl));
+  // barcode DOI di ujung kanan bawah halaman
+  if (doi){ const bc = await barcodePNG(doi); const w=200, h=30, R=RX+RW; doc.addImage(bytesUrl(bc.bytes), "PNG", R-w, F.bottom-h-6, w, h); doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(0,0,0); doc.text(doi, R, F.bottom+2, {align:"right"}); }
   return doc.output("blob");
 }
 async function buildInvoicePdf(paket){
