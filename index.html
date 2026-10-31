@@ -1,3 +1,5 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>KTI Checker</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -285,6 +287,19 @@ details.how td{text-align:left}
 .inclbox{display:inline-flex;align-items:center;margin-right:2px;cursor:pointer}.inclbox input{width:17px;height:17px;accent-color:var(--accent,#4f46e5);cursor:pointer;margin:0}
 .pt-row.excl,.babcard.excl{opacity:.5}.f.excl,tr.excl{opacity:.45}.f.excl .f-head h4{text-decoration:line-through}
 .inclbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px}.inclbar .small{margin-right:auto}
+.conndot{width:8px;height:8px;border-radius:50%;background:var(--warn);display:inline-block}.conndot.ok{background:var(--ok)}
+.aidlg{border:1px solid var(--line);border-radius:18px;padding:0;background:var(--surface);color:var(--fg);width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 32px);box-shadow:var(--shadow)}
+.aidlg::backdrop{background:rgba(8,12,30,.55)}
+.aidlg-in{padding:20px}.aidlg h2{font-size:18px}
+.aiopts{display:grid;gap:8px}
+.aiopt{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);cursor:pointer;font-size:13px}
+.aiopt.on{border-color:var(--accent);background:var(--accent-soft)}
+.aiopt input{margin-top:3px}
+.aitag{font-style:normal;font-size:11px;font-weight:700;margin-left:6px;padding:1px 7px;border-radius:99px;background:var(--warn-soft);color:var(--warn)}.aitag.ok{background:var(--ok-soft);color:var(--ok)}
+.aikey{margin-top:12px}.aikey input,.aimodels input{display:block;width:100%;margin-top:4px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);font-family:var(--mono);font-size:12.5px}
+.aimodels{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:8px}
+@media (max-width:520px){.aimodels{grid-template-columns:minmax(0,1fr)}}
+.aibtns{display:flex;gap:8px;align-items:center;margin-top:16px;flex-wrap:wrap}
 </style>
 <style>
 .btn.warn{color:var(--err)}
@@ -370,6 +385,7 @@ details.how td{text-align:left}
         <button class="btn" id="btnTpl" type="button" data-view="template"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM14 17l2 2 4-4"/></svg>Kesesuaian template</button>
         <button class="btn" id="btnAdm" type="button" data-view="admin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6V3Zm9 0v4h4M9 12h7M9 16h7M9 8h3"/></svg>LOA &amp; Invoice</button>
         <button class="btn" id="btnExport" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>Ekspor</button>
+        <button class="btn" id="btnConn" type="button" title="Pilih penyedia AI: Claude, Gemini, atau ChatGPT"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7V3M15 7V3M7 7h10v4a5 5 0 0 1-10 0V7ZM12 16v5"/></svg><span id="connLbl">Konektor AI</span><i class="conndot" id="connDot"></i></button>
         <button class="btn warn" id="btnReset" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5"/></svg><span>Reset</span></button>
         <input type="file" id="fileIn" class="file-in" accept=".docx,.pdf,.txt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf,text/plain" aria-label="Pilih berkas naskah">
       </div>
@@ -390,6 +406,198 @@ details.how td{text-align:left}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
 <script>
 "use strict";
+/* ═════════════ KONEKTOR AI (Claude / Gemini / ChatGPT) ═════════════
+   Semua fitur AI memanggil S.sample(input, opts) dan S.sample.json(input, opts).
+   Di claude.ai, S.sample adalah kapabilitas "sample" milik Claude. Untuk penyedia lain,
+   aiMakeSampler() membuat fungsi dengan antarmuka yang sama yang memanggil API penyedia
+   langsung dari peramban memakai kunci API milik pengguna (disimpan hanya di perangkat ini). */
+const AI_PROV = {
+  claude:   {name:"Claude",  label:"Claude di claude.ai", desc:"Memakai akun Claude Anda saat aplikasi dibuka di claude.ai atau aplikasi Claude. Tanpa kunci API. Satu-satunya pilihan yang dapat mencari sumber lewat Scite, Consensus, dan SciSpace.", needKey:false},
+  gemini:   {name:"Gemini",  label:"Google Gemini", desc:"Memakai kunci API Gemini dari Google AI Studio (tersedia kuota gratis).", needKey:true, keyUrl:"https://aistudio.google.com/apikey", keyHint:"AIza…",
+             models:{quick:"gemini-2.5-flash", default:"gemini-2.5-flash", complex:"gemini-2.5-pro"}},
+  openai:   {name:"ChatGPT", label:"ChatGPT (OpenAI)", desc:"Memakai kunci API OpenAI. Langganan ChatGPT Plus tidak termasuk API; kredit API dibeli terpisah di platform.openai.com.", needKey:true, keyUrl:"https://platform.openai.com/api-keys", keyHint:"sk-…",
+             models:{quick:"gpt-5-mini", default:"gpt-5-mini", complex:"gpt-5"}},
+  claudeapi:{name:"Claude",  label:"Claude API (Anthropic)", desc:"Memakai kunci API Anthropic, untuk memakai Claude di luar claude.ai.", needKey:true, keyUrl:"https://console.anthropic.com/settings/keys", keyHint:"sk-ant-…",
+             models:{quick:"claude-haiku-5-5", default:"claude-sonnet-5-5", complex:"claude-opus-5-5"}}
+};
+const AI_TIERS = [["quick","Cepat"],["default","Standar"],["complex","Teliti"]];
+const AI_STORE = "kti.aiconn";
+const AIC = (()=>{ let c=null; try{ c=JSON.parse(localStorage.getItem(AI_STORE)||"null"); }catch(e){}
+  c = c && typeof c==="object" ? c : {};
+  return {provider: AI_PROV[c.provider] ? c.provider : "claude", keys: c.keys||{}, models: c.models||{}, saved: !!c.provider}; })();
+const AIRT = {sample:null, mcp:null, checked:false};   // kapabilitas claude.ai (bila ada)
+function aiSave(){ try{ localStorage.setItem(AI_STORE, JSON.stringify({provider:AIC.provider, keys:AIC.keys, models:AIC.models})); AIC.saved=true; return true; }catch(e){ AIC.saved=true; return false; } }
+function AIN(){ return AI_PROV[AIC.provider].name; }
+function AIQ(){ return AIC.provider==="claude" ? "kuota akun Claude Anda" : `kuota API ${AIN()} Anda`; }
+function aiModel(p, tier){ const m=(AIC.models[p]||{})[tier]; return (m&&String(m).trim()) || AI_PROV[p].models[tier] || AI_PROV[p].models.default; }
+function aiNA(prefix){
+  const p = AIC.provider, pre = prefix ? prefix+" " : "";
+  if (p==="claude") return pre + "Fitur AI belum terhubung. Buka halaman ini di claude.ai atau aplikasi Claude, atau pilih Gemini / ChatGPT di menu Konektor AI.";
+  return pre + `Masukkan kunci API ${AI_PROV[p].label} di menu Konektor AI untuk memakai fitur ini.`;
+}
+function aiErr(code, message, text){ const e=new Error(message); e.code=code; e.message=message; if (text) e.text=text; return e; }
+function aiParseJSON(t){
+  const s=String(t||"").trim(); try{ return JSON.parse(s); }catch(e){}
+  const f=s.match(/```(?:json)?\s*([\s\S]*?)```/i); if (f){ try{ return JSON.parse(f[1].trim()); }catch(e){} }
+  const a=s.search(/[\[{]/), b=Math.max(s.lastIndexOf("}"), s.lastIndexOf("]"));
+  if (a>=0 && b>a){ try{ return JSON.parse(s.slice(a,b+1)); }catch(e){} }
+  throw aiErr("invalid_json", "Jawaban AI tidak dapat dibaca sebagai JSON.", s);
+}
+function aiTurns(input){
+  const raw = typeof input==="string" ? [{role:"user", content:input}] : (Array.isArray(input)?input:[]).map(t=>({role:t.role==="assistant"?"assistant":"user", content:String(t.content||"")}));
+  const out=[]; raw.forEach(t=>{ const l=out[out.length-1]; if (l && l.role===t.role) l.content += "\n\n"+t.content; else out.push({...t}); });
+  while (out.length && out[0].role!=="user") out.shift();
+  if (!out.length || out[out.length-1].role!=="user") throw aiErr("invalid_request","Masukan untuk AI harus diakhiri pesan pengguna.");
+  return out;
+}
+async function aiSSE(res, onData){
+  const rd=res.body.getReader(), dec=new TextDecoder(); let buf="";
+  const line = l => { l=l.replace(/\r$/,""); if (!l.startsWith("data:")) return; const d=l.slice(5).trim(); if (!d || d==="[DONE]") return; let j; try{ j=JSON.parse(d); }catch(e){ return; } onData(j); };
+  for(;;){ const {value, done}=await rd.read(); if (done) break; buf+=dec.decode(value,{stream:true}); let i; while((i=buf.indexOf("\n"))>=0){ line(buf.slice(0,i)); buf=buf.slice(i+1); } }
+  if (buf) line(buf);
+}
+async function aiHttpErr(res, prov){
+  let msg=""; try{ const j=await res.json(); msg=(j.error&&(j.error.message||j.error.status))||j.message||""; }catch(e){}
+  const n=AI_PROV[prov].name, st=res.status;
+  if (st===401||st===403) return aiErr("not_granted", `Kunci API ${n} ditolak (${st}). Periksa kunci di menu Konektor AI.${msg?" "+msg:""}`);
+  if (st===429) return aiErr("rate_limited", `Batas pemakaian API ${n} tercapai (429). Tunggu sebentar lalu coba lagi.${msg?" "+msg:""}`);
+  if (st===404) return aiErr("invalid_request", `Model tidak ditemukan di ${n} (404). Periksa nama model di menu Konektor AI.${msg?" "+msg:""}`);
+  if (st===400||st===413) return aiErr(/too long|too large|context|token/i.test(msg)?"prompt_too_large":"invalid_request", `Permintaan ditolak ${n} (${st}).${msg?" "+msg:""}`);
+  return aiErr("upstream_error", `Server ${n} bermasalah (${st}). Coba lagi nanti.${msg?" "+msg:""}`);
+}
+/* Satu permintaan streaming ke penyedia; mengembalikan {text, truncated}. */
+async function aiCall(prov, key, turns, o){
+  const tier = AI_PROV[prov].models[o.modelTier] ? o.modelTier : "default", model=aiModel(prov, tier);
+  let text="", stop="", streamErr=null;
+  const push = d => { if (!d) return; text+=d; if (o.onText) try{ o.onText({text, delta:d}); }catch(e){} };
+  let url, init={method:"POST", signal:o.signal, headers:{"content-type":"application/json"}};
+  if (prov==="gemini"){
+    url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
+    init.headers["x-goog-api-key"]=key;
+    init.body=JSON.stringify({contents:turns.map(t=>({role:t.role==="assistant"?"model":"user", parts:[{text:t.content}]})), generationConfig: o.json?{responseMimeType:"application/json"}:{}});
+  } else if (prov==="openai"){
+    url="https://api.openai.com/v1/chat/completions";
+    init.headers.authorization="Bearer "+key;
+    init.body=JSON.stringify({model, messages:turns, stream:true});
+  } else {
+    url="https://api.anthropic.com/v1/messages";
+    Object.assign(init.headers, {"x-api-key":key, "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true"});
+    init.body=JSON.stringify({model, max_tokens: tier==="quick"?8192:32000, messages:turns, stream:true});
+  }
+  let res;
+  try{ res=await fetch(url, init); }
+  catch(e){ if (o.signal && o.signal.aborted) throw aiErr("cancelled","Dibatalkan.");
+    throw aiErr("upstream_error", `Tidak dapat menghubungi server ${AI_PROV[prov].name}. Periksa internet Anda. Bila aplikasi dibuka di claude.ai, halaman tidak diizinkan menghubungi penyedia lain: pilih Claude, atau buka berkas index.html langsung di peramban.`); }
+  if (!res.ok) throw await aiHttpErr(res, prov);
+  try{
+    await aiSSE(res, j=>{
+      if (j.error){ streamErr=j.error; return; }
+      if (prov==="gemini"){ const c=(j.candidates||[])[0]; if (j.promptFeedback&&j.promptFeedback.blockReason) stop="BLOCKED";
+        if (c){ ((c.content&&c.content.parts)||[]).forEach(p=>{ if (!p.thought && p.text) push(p.text); }); if (c.finishReason) stop=c.finishReason; } }
+      else if (prov==="openai"){ const c=(j.choices||[])[0]; if (c){ if (c.delta&&c.delta.content) push(c.delta.content); if (c.finish_reason) stop=c.finish_reason; } }
+      else { if (j.type==="content_block_delta" && j.delta && j.delta.type==="text_delta") push(j.delta.text); if (j.type==="message_delta" && j.delta && j.delta.stop_reason) stop=j.delta.stop_reason; }
+    });
+  }catch(e){ if (o.signal && o.signal.aborted) throw aiErr("cancelled","Dibatalkan.", text); throw aiErr("upstream_error", `Sambungan ke ${AI_PROV[prov].name} terputus.`, text); }
+  if (streamErr) throw aiErr(/overload|rate|quota|exhaust/i.test(String(streamErr.type||streamErr.status||streamErr.message))?"rate_limited":"upstream_error", `${AI_PROV[prov].name}: ${streamErr.message||"terjadi galat"}`, text);
+  if (/^(BLOCKED|SAFETY|PROHIBITED_CONTENT|RECITATION|refusal|content_filter)$/.test(stop) && !text) throw aiErr("refused", `${AI_PROV[prov].name} menolak menjawab permintaan ini.`);
+  if (!text.trim()) throw aiErr("empty_completion", `${AI_PROV[prov].name} tidak mengembalikan jawaban.`);
+  return {text, truncated: /^(MAX_TOKENS|length|max_tokens)$/.test(stop)};
+}
+function aiMakeSampler(prov, key){
+  let running=0; const queue=[];
+  const slot = () => running<3 ? (running++, Promise.resolve()) : new Promise(r=>queue.push(r));
+  const free = () => { const n=queue.shift(); if (n) n(); else running--; };
+  const wait = (ms, signal) => new Promise((r,j)=>{ const t=setTimeout(r,ms); if (signal) signal.addEventListener("abort",()=>{ clearTimeout(t); j(aiErr("cancelled","Dibatalkan.")); },{once:true}); });
+  const run = async (input, o={}) => {
+    const turns=aiTurns(input); if (o.json){ const l=turns[turns.length-1]; l.content += "\n\nPENTING: balas HANYA dengan satu nilai JSON yang valid, tanpa teks lain dan tanpa blok kode Markdown."; }
+    if (o.signal && o.signal.aborted) throw aiErr("cancelled","Dibatalkan.");
+    await slot();
+    try{
+      for (let i=0;;i++){
+        try{ return await aiCall(prov, key, turns, o); }
+        catch(e){ if (e.code==="rate_limited" && i<2 && !(e.text)){ await wait(i?20000:8000, o.signal); continue; } throw e; }
+      }
+    } finally { free(); }
+  };
+  const sample = async (input, o={}) => { try{ return await run(input, o); } catch(e){ aiReport(e); throw e; } };
+  sample.json = async (input, o={}) => { try{ const r=await run(input, {...o, json:true}); if (r.truncated) throw aiErr("invalid_json","Jawaban AI terpotong karena terlalu panjang.", r.text); return aiParseJSON(r.text); } catch(e){ aiReport(e); throw e; } };
+  sample.limits = async () => ({});
+  sample.provider = prov;
+  return sample;
+}
+let aiLastToast=0;
+function aiReport(e){ if (!e || e.code==="cancelled") return; const now=Date.now(); if (now-aiLastToast<4000) return; aiLastToast=now; try{ toast(e.message||"Permintaan AI gagal."); }catch(x){} }
+/* Terapkan pilihan konektor ke state aplikasi. */
+function aiApply(){
+  const p=AIC.provider;
+  if (p==="claude"){ S.sample=AIRT.sample; S.mcp=AIRT.mcp; S.sampleChecked=AIRT.checked; }
+  else { const k=String(AIC.keys[p]||"").trim(); S.sample = k ? aiMakeSampler(p,k) : null; S.mcp=null; S.sampleChecked=true; }
+}
+function aiStatus(){
+  const p=AIC.provider;
+  if (p==="claude") return AIRT.sample ? {ok:true, t:"Claude terhubung"} : AIRT.checked ? {ok:false, t:"Claude tidak tersedia di sini"} : {ok:false, t:"Menghubungkan ke Claude…"};
+  return AIC.keys[p] ? {ok:true, t:`${AI_PROV[p].name} siap`} : {ok:false, t:`${AI_PROV[p].name}: kunci API belum diisi`};
+}
+/* ── Dialog pengaturan ── */
+function aiDialog(first){
+  let dlg=document.getElementById("aiDlg");
+  if (!dlg){ dlg=document.createElement("dialog"); dlg.id="aiDlg"; dlg.className="aidlg"; document.body.appendChild(dlg);
+    dlg.addEventListener("cancel", e=>{ if (!AIC.saved){ e.preventDefault(); } }); }
+  const D = {p:AIC.provider, keys:{...AIC.keys}, models:JSON.parse(JSON.stringify(AIC.models||{})), test:""};
+  const esc2 = s => String(s==null?"":s).replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  const inClaude = !!AIRT.sample;
+  const draw = () => {
+    const P=AI_PROV[D.p];
+    dlg.innerHTML = `<form method="dialog" class="aidlg-in">
+      <h2>${first?"Pengaturan awal: konektor AI":"Konektor AI"}</h2>
+      <p class="small muted" style="margin:6px 0 14px">Pilih AI yang menjalankan tinjauan, review reviewer, revisi, cek grammar, cek AI, terjemahan, dan Tanya Pembimbing. Pemeriksaan otomatis (struktur, format, sitasi, dan lainnya) tetap berjalan di perangkat Anda tanpa AI.</p>
+      <div class="aiopts" role="radiogroup" aria-label="Penyedia AI">${Object.entries(AI_PROV).map(([id,v])=>`<label class="aiopt ${D.p===id?"on":""}"><input type="radio" name="aiprov" value="${id}" ${D.p===id?"checked":""}><span><b>${esc2(v.label)}</b>${id==="claude"?`<em class="aitag ${inClaude?"ok":""}">${inClaude?"tersedia di sini":AIRT.checked?"tidak tersedia di sini":"memeriksa…"}</em>`:""}<br><span class="small muted">${esc2(v.desc)}</span></span></label>`).join("")}</div>
+      ${P.needKey?`<div class="aikey">
+        <label class="small"><b>Kunci API ${esc2(P.name)}</b> · <a class="linkish" href="${P.keyUrl}" target="_blank" rel="noopener">buat kunci</a>
+          <input type="password" id="aiKey" autocomplete="off" spellcheck="false" placeholder="${esc2(P.keyHint)}" value="${esc2(D.keys[D.p]||"")}"></label>
+        <details class="small" style="margin-top:8px"><summary style="cursor:pointer">Model (opsional)</summary>
+          <div class="aimodels">${AI_TIERS.map(([t,l])=>`<label>${l}<input data-aitier="${t}" list="aiModelList" spellcheck="false" placeholder="${esc2(P.models[t])}" value="${esc2((D.models[D.p]||{})[t]||"")}"></label>`).join("")}</div>
+          <datalist id="aiModelList"></datalist>
+          <p class="small muted" style="margin:6px 0 0">Kosongkan untuk memakai bawaan. Mode "Teliti" di aplikasi memakai model Teliti.</p></details>
+        <p class="small muted" style="margin:8px 0 0">Kunci disimpan hanya di peramban perangkat ini dan dikirim langsung ke ${esc2(P.name)}. Biaya atau kuota mengikuti akun API Anda. Pencarian sumber Scite/Consensus/SciSpace tidak tersedia untuk penyedia ini.${inClaude?" <b>Catatan:</b> di dalam claude.ai halaman ini tidak dapat menghubungi penyedia lain; pakai berkas index.html yang dibuka langsung di peramban.":""}</p>
+      </div>`:`<p class="small muted" style="margin:10px 0 0">${inClaude?"Aplikasi sedang dibuka di claude.ai, jadi Claude siap dipakai.":"Pilihan ini hanya berfungsi saat aplikasi dibuka sebagai Artifact di claude.ai atau aplikasi Claude. Di luar itu, pilih Gemini, ChatGPT, atau Claude API."}</p>`}
+      ${D.test?`<div class="notice ${D.testOk?"":"err"}" style="margin-top:10px"><div>${esc2(D.test)}</div></div>`:""}
+      <div class="aibtns">${P.needKey?`<button type="button" class="btn sm" data-ai="test">Uji koneksi</button>`:""}<span style="flex:1"></span>${AIC.saved?`<button type="button" class="btn sm" data-ai="cancel">Batal</button>`:""}<button type="button" class="btn primary sm" data-ai="save">Simpan</button></div>
+    </form>`;
+  };
+  const collect = () => { const k=dlg.querySelector("#aiKey"); if (k) D.keys[D.p]=k.value.trim();
+    const m={}; dlg.querySelectorAll("[data-aitier]").forEach(i=>{ if (i.value.trim()) m[i.dataset.aitier]=i.value.trim(); }); if (AI_PROV[D.p].needKey) D.models[D.p]=m; };
+  dlg.onchange = e=>{ if (e.target.name==="aiprov"){ collect(); D.p=e.target.value; D.test=""; draw(); } };
+  dlg.onclick = async e=>{
+    const b=e.target.closest("[data-ai]"); if (!b) return; const a=b.dataset.ai; collect();
+    if (a==="cancel"){ dlg.close(); return; }
+    if (a==="test"){
+      const k=D.keys[D.p]; if (!k){ D.test="Isi kunci API terlebih dahulu."; D.testOk=false; return draw(); }
+      b.disabled=true; b.textContent="Menguji…";
+      const saved={...AIC}; AIC.models={...AIC.models, [D.p]:D.models[D.p]||{}};
+      try{ const r=await aiCall(D.p, k, [{role:"user", content:"Balas hanya dengan kata: OK"}], {modelTier:"quick"}); D.test=`Terhubung ke ${AI_PROV[D.p].name} (${aiModel(D.p,"quick")}): "${r.text.trim().slice(0,40)}"`; D.testOk=true; }
+      catch(err){ D.test=err.message||"Gagal terhubung."; D.testOk=false; }
+      AIC.models=saved.models;
+      draw();
+      if (D.testOk) aiListModels(D.p, k).then(ids=>{ const dl=dlg.querySelector("#aiModelList"); if (dl && ids.length) dl.innerHTML=ids.map(i=>`<option value="${esc2(i)}">`).join(""); });
+      return;
+    }
+    if (a==="save"){
+      if (AI_PROV[D.p].needKey && !D.keys[D.p]){ D.test=`Isi kunci API ${AI_PROV[D.p].name}, atau pilih penyedia lain.`; D.testOk=false; return draw(); }
+      AIC.provider=D.p; AIC.keys=D.keys; AIC.models=D.models;
+      const ok=aiSave(); aiApply(); dlg.close(); render();
+      toast(`Konektor AI: ${AI_PROV[D.p].label}${ok?"":" (tidak dapat disimpan di peramban ini; berlaku sampai halaman ditutup)"}.`);
+    }
+  };
+  draw(); if (!dlg.open) dlg.showModal();
+}
+async function aiListModels(p, key){
+  try{
+    if (p==="gemini"){ const r=await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200",{headers:{"x-goog-api-key":key}}); const j=await r.json(); return (j.models||[]).filter(m=>(m.supportedGenerationMethods||[]).includes("generateContent")).map(m=>m.name.replace(/^models\//,"")); }
+    if (p==="openai"){ const r=await fetch("https://api.openai.com/v1/models",{headers:{authorization:"Bearer "+key}}); const j=await r.json(); return (j.data||[]).map(m=>m.id).filter(id=>/^(gpt|o\d|chatgpt)/.test(id)).sort(); }
+    const r=await fetch("https://api.anthropic.com/v1/models?limit=100",{headers:{"x-api-key":key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"}}); const j=await r.json(); return (j.data||[]).map(m=>m.id);
+  }catch(e){ return []; }
+}
 /* ═════════════ PEDOMAN KTI ═════════════ */
 const GUIDE = {
   Kuantitatif:{
@@ -581,7 +789,7 @@ const NAV = [
 ];
 function viewMeta(v){
   const a=isArt();
-  return ({overview:["Ringkasan",a?"Kepatuhan artikel terhadap template Nusantara of Research":"Kepatuhan naskah terhadap pedoman"],perbab:[a?"Per Bagian":"Per Bab",a?"Statistik dan temuan setiap bagian artikel":"Statistik dan temuan setiap bab"],naskah:["Naskah","Temuan ditandai langsung pada teks"],struktur:[a?"Struktur Artikel":"Struktur Bab",a?"Urutan dan format judul bagian":"Kelengkapan dan urutan sub-bab wajib"],isi:[a?"Isi per Bagian":"Isi per Bab",a?"Ketentuan isi setiap bagian artikel":"Pemeriksaan isi khas setiap bab"],abstrak:[a?"Judul & Abstrak":"Abstrak",a?"Judul, penulis, ABSTRACT, ABSTRAK, kata kunci":"Panjang, unsur, dan kata kunci"],bahasa:["Ejaan & Diksi","Typo, tanda baca, dan istilah · bahasa Indonesia dan Inggris"],sitasi:["Sitasi & Pustaka",a?"APA edisi 7: kutipan dalam teks dan daftar rujukan":"Format APA dan kecocokan rujukan"],visual:["Tabel & Gambar","Letak, perataan, dan penomoran keterangan"],format:["Format Dokumen",a?"Huruf Arial Narrow, ukuran, perataan":"Kertas, margin, huruf, dan spasi"],ai:a?["Review Reviewer","Simulasi 1–3 reviewer dan editor jurnal"]:["Tinjauan Claude","Substansi, konsistensi, dan typo"],revisi:["Revisi Naskah","Perbaikan per bagian berdasarkan semua temuan"],copyedit:["Copyediting","Kemas ulang artikel sesuai template jurnal"],template:["Kesesuaian Template","Dibandingkan dengan template resmi Nusantara of Research"],banding:["Bandingkan Revisi","Perbedaan redaksi dan aktivitas revisi: naskah awal, saran, dan naskah revisi"],grammar:["Cek Grammar","Tata bahasa Indonesia dan Inggris"],similarity:["Cek Similarity","Kemiripan dengan literatur terindeks (indikatif)"],aicheck:["Cek Penggunaan AI","Indikasi teks buatan AI (indikatif)"],nor:["Publikasi NOR","Alur OJS: Workflow (Submission, Review, Copyediting, Production) dan Publication"],admin:["LOA & Invoice","Surat penerimaan dan tagihan dari data artikel"],ojs:["Siap Publish (OJS)","Metadata artikel siap salin-tempel ke OJS"],chat:["Tanya Pembimbing","Diskusikan naskah Anda dengan Claude"],unggah:["Unggah Naskah","Unggah .docx, .pdf, .txt atau tempel teks"]})[v];
+  return ({overview:["Ringkasan",a?"Kepatuhan artikel terhadap template Nusantara of Research":"Kepatuhan naskah terhadap pedoman"],perbab:[a?"Per Bagian":"Per Bab",a?"Statistik dan temuan setiap bagian artikel":"Statistik dan temuan setiap bab"],naskah:["Naskah","Temuan ditandai langsung pada teks"],struktur:[a?"Struktur Artikel":"Struktur Bab",a?"Urutan dan format judul bagian":"Kelengkapan dan urutan sub-bab wajib"],isi:[a?"Isi per Bagian":"Isi per Bab",a?"Ketentuan isi setiap bagian artikel":"Pemeriksaan isi khas setiap bab"],abstrak:[a?"Judul & Abstrak":"Abstrak",a?"Judul, penulis, ABSTRACT, ABSTRAK, kata kunci":"Panjang, unsur, dan kata kunci"],bahasa:["Ejaan & Diksi","Typo, tanda baca, dan istilah · bahasa Indonesia dan Inggris"],sitasi:["Sitasi & Pustaka",a?"APA edisi 7: kutipan dalam teks dan daftar rujukan":"Format APA dan kecocokan rujukan"],visual:["Tabel & Gambar","Letak, perataan, dan penomoran keterangan"],format:["Format Dokumen",a?"Huruf Arial Narrow, ukuran, perataan":"Kertas, margin, huruf, dan spasi"],ai:a?["Review Reviewer","Simulasi 1–3 reviewer dan editor jurnal"]:[("Tinjauan "+AIN()),"Substansi, konsistensi, dan typo"],revisi:["Revisi Naskah","Perbaikan per bagian berdasarkan semua temuan"],copyedit:["Copyediting","Kemas ulang artikel sesuai template jurnal"],template:["Kesesuaian Template","Dibandingkan dengan template resmi Nusantara of Research"],banding:["Bandingkan Revisi","Perbedaan redaksi dan aktivitas revisi: naskah awal, saran, dan naskah revisi"],grammar:["Cek Grammar","Tata bahasa Indonesia dan Inggris"],similarity:["Cek Similarity","Kemiripan dengan literatur terindeks (indikatif)"],aicheck:["Cek Penggunaan AI","Indikasi teks buatan AI (indikatif)"],nor:["Publikasi NOR","Alur OJS: Workflow (Submission, Review, Copyediting, Production) dan Publication"],admin:["LOA & Invoice","Surat penerimaan dan tagihan dari data artikel"],ojs:["Siap Publish (OJS)","Metadata artikel siap salin-tempel ke OJS"],chat:["Tanya Pembimbing",("Diskusikan naskah Anda dengan "+AIN())],unggah:["Unggah Naskah","Unggah .docx, .pdf, .txt atau tempel teks"]})[v];
 }
 const CAT = {struktur:"Struktur",isi:"Isi per Bab",abstrak:"Abstrak",bahasa:"Ejaan & Diksi",sitasi:"Sitasi & Pustaka",visual:"Tabel & Gambar",format:"Format"};
 const catLabel = c => isArt() ? ({struktur:"Struktur",isi:"Isi per Bagian",abstrak:"Judul & Abstrak"}[c]||CAT[c]) : CAT[c];
@@ -1509,7 +1717,7 @@ Buat 8–20 langkah petunjuk revisi.`;
 }
 async function runReview(){
   if (S.aiBusy || !S.local) return;
-  if (!S.sample){ S.aiErr = S.sampleChecked ? "Review reviewer tidak tersedia di tampilan ini. Buka halaman ini di claude.ai atau aplikasi Claude." : "Menghubungkan ke Claude… coba lagi sebentar."; go("ai"); return; }
+  if (!S.sample){ S.aiErr = S.sampleChecked ? aiNA("Review reviewer belum dapat dijalankan.") : ("Menghubungkan ke "+AIN()+"… coba lagi sebentar."); go("ai"); return; }
   const n = S.nRev; const tier = S.aiMode==="teliti"?"complex":"default";
   S.aiBusy=true; S.aiErr=""; S.aiCtl=new AbortController(); S.ai=null;
   S.revProg = Array.from({length:n},()=>({st:"run",chars:0})).concat([{st:"wait",chars:0}]);
@@ -1556,7 +1764,7 @@ async function runReview(){
     toast(`Review selesai: keputusan editor "${keputusan}".`);
   }catch(e){
     const code = e && e.code;
-    S.aiErr = code==="cancelled" ? "" : code==="not_granted" ? "Izin memakai Claude tidak diberikan. Pemeriksaan otomatis tetap dapat dipakai." : code==="rate_limited" ? "Batas pemakaian Claude tercapai. Coba lagi beberapa saat lagi, atau kurangi jumlah reviewer." : code==="invalid_json" ? "Jawaban reviewer tidak dapat dibaca sebagai laporan. Tekan Review ulang, atau pilih mode Cepat." : code==="prompt_too_large" ? "Artikel terlalu panjang untuk sekali review." : code==="sampling_disabled" ? "Claude tidak tersedia untuk akun ini." : "Review terputus. Tekan Review ulang untuk mencoba lagi.";
+    S.aiErr = code==="cancelled" ? "" : code==="not_granted" ? ("Izin memakai "+AIN()+" tidak diberikan. Pemeriksaan otomatis tetap dapat dipakai.") : code==="rate_limited" ? ("Batas pemakaian "+AIN()+" tercapai. Coba lagi beberapa saat lagi, atau kurangi jumlah reviewer.") : code==="invalid_json" ? "Jawaban reviewer tidak dapat dibaca sebagai laporan. Tekan Review ulang, atau pilih mode Cepat." : code==="prompt_too_large" ? "Artikel terlalu panjang untuk sekali review." : code==="sampling_disabled" ? (AIN()+" tidak tersedia untuk akun ini.") : "Review terputus. Tekan Review ulang untuk mencoba lagi.";
   }finally{ S.aiBusy=false; S.aiCtl=null; S.aiStream=""; render(); }
 }
 const doneKey = () => "kti.done."+(S.doc?S.doc.name:"");
@@ -1609,7 +1817,7 @@ function vReview(){
     <div class="card c8"><h3>Keputusan editor</h3><div class="ai-hero">${ring(ai.skor,150,20,"Skor")}<div style="flex:1;min-width:220px"><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">${sevPill(decSev(ai.keputusan), ai.keputusan)}${ai.reviewers.map(r=>`<span class="chip">${esc(revName(r.nama))}: ${esc(r.rekomendasi)}</span>`).join("")}</div><p style="margin:0">${esc(ai.ringkasan)}</p>${ai.failed?`<p class="small muted">${ai.failed} reviewer gagal merespons; keputusan memakai reviewer yang berhasil.</p>`:""}</div></div></div>
     <div class="card c4"><h3>Yang perlu dipertahankan</h3>${ai.kekuatan.length?`<ul class="blist">${ai.kekuatan.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:`<p class="empty">Reviewer tidak mencatat kekuatan khusus.</p>`}</div>
   </section>
-  <div class="notice" style="align-items:center">${icon(IC.info)}<div style="flex:1">Lanjutkan dengan <b>Revisi Naskah</b>: Claude memperbaiki setiap bagian berdasarkan komentar reviewer, petunjuk editor, dan temuan sistem.</div><button class="btn primary sm" data-view="revisi">Revisi naskah →</button></div>
+  <div class="notice" style="align-items:center">${icon(IC.info)}<div style="flex:1">Lanjutkan dengan <b>Revisi Naskah</b>: ${AIN()} memperbaiki setiap bagian berdasarkan komentar reviewer, petunjuk editor, dan temuan sistem.</div><button class="btn primary sm" data-view="revisi">Revisi naskah →</button></div>
   ${vReviewSetup(false)}${head}${vReviewDl()}<div class="toolbar">${tabs}</div><div class="card" style="margin-bottom:16px">${inclBar("rev","Komentar reviewer yang disertakan dalam laporan dan balon komentar")}</div>${body}`;
 }
 function reviewReportHTML(){
@@ -1637,7 +1845,7 @@ function jurnalDesc(){
 async function buildJournalProfile(){
   const urlEl=$("#jrUrl"), infoEl=$("#jrInfo"); if (urlEl) S.jr.url=urlEl.value.trim(); if (infoEl) S.jr.info=infoEl.value;
   if (!/^https?:\/\/\S+\.\S+/.test(S.jr.url)){ S.jr.err="Masukkan alamat jurnal lengkap, diawali https://"; return render(); }
-  if (!S.sample){ S.jr.err = "Profil reviewer disusun oleh Claude; buka halaman ini di claude.ai atau aplikasi Claude."; return render(); }
+  if (!S.sample){ S.jr.err = aiNA("Profil reviewer disusun oleh AI."); return render(); }
   S.jr.busy=true; S.jr.err=""; saveJR(); render();
   const prompt = `Susun profil kompetensi dan gaya reviewer untuk jurnal ilmiah berikut, agar dapat dipakai untuk mensimulasikan review oleh reviewer/editor jurnal tersebut.
 
@@ -1653,7 +1861,7 @@ Balas HANYA JSON:
     const arr=v=>Array.isArray(v)?v.map(String):[];
     S.jr.profile = {url:S.jr.url, nama:String(r.nama||""), penerbit:String(r.penerbit||""), bidang:String(r.bidang||""), fokus:String(r.fokus||""), kompetensi:arr(r.kompetensi), standar:arr(r.standar), gaya:String(r.gaya||""), penolakan:arr(r.penolakan), keyakinan:String(r.keyakinan||"sedang").toLowerCase(), catatan:String(r.catatan||""), info:!!S.jr.info.trim()};
     saveJR(); toast("Profil reviewer tersusun: "+(S.jr.profile.nama||jurnalLabel()));
-  }catch(e){ S.jr.err = e&&e.code==="not_granted" ? "Izin memakai Claude tidak diberikan." : e&&e.code==="rate_limited" ? "Batas pemakaian Claude tercapai. Coba lagi nanti." : "Profil gagal disusun. Coba lagi."; }
+  }catch(e){ S.jr.err = e&&e.code==="not_granted" ? ("Izin memakai "+AIN()+" tidak diberikan.") : e&&e.code==="rate_limited" ? ("Batas pemakaian "+AIN()+" tercapai. Coba lagi nanti.") : "Profil gagal disusun. Coba lagi."; }
   finally{ S.jr.busy=false; render(); }
 }
 function vJournalCard(){
@@ -1666,7 +1874,7 @@ function vJournalCard(){
       <div class="c6"><label class="small muted" for="jrInfo">Focus &amp; Scope / Author Guidelines (opsional, sangat disarankan)</label><textarea id="jrInfo" rows="3" placeholder="Tempel teks dari halaman Focus and Scope atau Author Guidelines jurnal tersebut." style="width:100%;margin-top:4px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:13px;resize:vertical">${esc(S.jr.info)}</textarea></div>
     </div>
     <div class="toolbar" style="margin:10px 0 0"><button class="btn sm ${fresh?"":"primary"}" data-act="jrprofile" ${S.jr.busy?"disabled":""}>${S.jr.busy?`<span class="spinner" style="width:14px;height:14px"></span>Menyusun profil…`:fresh?"Perbarui profil reviewer":"Susun profil reviewer"}</button>
-      <span class="small muted">Claude tidak dapat membuka tautan; profil disusun dari pengetahuan Claude tentang jurnal itu dan teks yang Anda tempel.</span></div>
+      <span class="small muted">${AIN()} tidak dapat membuka tautan; profil disusun dari pengetahuan ${AIN()} tentang jurnal itu dan teks yang Anda tempel.</span></div>
     ${S.jr.err?`<div class="notice err" style="margin-top:10px">${icon(IC.warn)}<div>${esc(S.jr.err)}</div></div>`:""}
     ${p && !fresh?`<p class="small" style="color:var(--warn);margin:10px 0 0">Profil tersimpan dibuat untuk alamat lain. Susun ulang untuk alamat ini.</p>`:""}
     ${fresh?`<div style="margin-top:12px;display:flex;flex-direction:column;gap:8px">
@@ -1694,7 +1902,7 @@ function reviewStandaloneHTML(){
 <p style="text-align:center;font-weight:700;color:#1F3864;margin:0">${esc(NOR_BAND)}</p><h1>HASIL REVIEW REVIEWER</h1><p class="sub">Simulasi review dengan standar reviewer ${esc(jurnalLabel())} · ${new Date().toLocaleDateString("id-ID",{day:"numeric",month:"long",year:"numeric"})}</p>
 <p><b>Naskah:</b> ${esc(d.name)}<br><b>Jumlah reviewer:</b> ${ai.n}<br><b>Jurnal acuan:</b> ${esc(S.jr.url)}</p>
 ${reviewReportHTML()}
-<p style="margin-top:30px;font-size:11px;color:#555">Dokumen ini adalah simulasi review oleh Claude dan bukan keputusan resmi jurnal mana pun.</p></body></html>`;
+<p style="margin-top:30px;font-size:11px;color:#555">Dokumen ini adalah simulasi review oleh ${AIN()} dan bukan keputusan resmi jurnal mana pun.</p></body></html>`;
 }
 function closeMenu(){ document.querySelectorAll(".dlmenu").forEach(m=>m.remove()); S.menuOpen=false; }
 function toggleExportMenu(){
@@ -1702,7 +1910,7 @@ function toggleExportMenu(){
   const b=$("#btnExport"); const r=b.getBoundingClientRect();
   const hasRev = S.ai && S.ai.mode==="review"; const hasRevisi = S.rev && S.rev.done;
   const items = [
-    ["rep-sys", "Raport analisis", "Ringkasan pemeriksaan sistem"+(S.ai&&S.ai.mode!=="review"?" + tinjauan Claude":"")+" (.html)", !!S.local],
+    ["rep-sys", "Raport analisis", "Ringkasan pemeriksaan sistem"+(S.ai&&S.ai.mode!=="review"?(" + tinjauan "+AIN()):"")+" (.html)", !!S.local],
     ["rep-rev", "Hasil review reviewer", hasRev?`Keputusan editor, petunjuk revisi, komentar ${S.ai.n} reviewer (.html)`:"Jalankan review reviewer dulu", hasRev],
     ["rep-cite", "Laporan sitasi & pustaka", S.local?"Tabel sitasi, daftar pustaka, temuan dan saran (.docx)":"Jalankan analisis dulu", !!S.local],
     ["rep-tplchk", "Kesesuaian template NOR", S.local&&isArt()?"Checklist template Nusantara of Research (.docx)":"Mode artikel jurnal, setelah analisis", !!(S.local&&isArt())],
@@ -1846,8 +2054,8 @@ function sciteToSource(h, extra){
 const retracted = h => (h.editorialNotices||[]).some(n=>/retract/i.test(n.status||""));
 async function searchSources(signal){
   const O=srcOpt(); const dbs=Object.keys(SRC_DB).filter(k=>O[k]);
-  if (!S.mcp) return {list:[], note:"Konektor literatur tidak tersedia; Claude tidak menambah sumber baru."};
-  if (!dbs.length) return {list:[], note:"Tidak ada basis data yang dipilih; Claude tidak menambah sumber baru."};
+  if (!S.mcp) return {list:[], note:("Konektor literatur tidak tersedia; "+AIN()+" tidak menambah sumber baru.")};
+  if (!dbs.length) return {list:[], note:("Tidak ada basis data yang dipilih; "+AIN()+" tidak menambah sumber baru.")};
   const M=S.local.M;
   const title = (M.paras.find(p=>p.text && p.tag!=="img")||{text:""}).text;
   const kw = (M.paras.find(p=>/^(kata\s*kunci|keywords?)\b/i.test(p.text))||{text:""}).text;
@@ -1897,7 +2105,7 @@ async function searchSources(signal){
   list.forEach((s,k)=>{ s.id="S"+(k+1); s.cite=citeForms(s); s.ref=apaRef(s); });
   const errTxt = e => ({server_not_connected:"belum terhubung di akun Anda", not_in_manifest:"tidak diizinkan untuk halaman ini", needs_reauth:"perlu disambungkan ulang", blocked_by_policy:"diblokir kebijakan organisasi", not_granted:"belum diizinkan"}[e&&e.code] || "gagal");
   const parts = dbs.map(k=>`${SRC_DB[k]} ${stat[k].n}${stat[k].n===0&&stat[k].err?` (${errTxt(stat[k].err)})`:""}`);
-  const note = (list.length ? `${list.length} sumber terverifikasi (terbit ${nowY-10} atau sesudahnya): ` : "Tidak ada sumber terverifikasi yang cocok. ") + parts.join(" · ") + (O.consensus?` · filter Consensus: jurnal ${qLabel}`:"") + (skipped?` · ${skipped} kandidat dilewati karena metadata tidak bisa diverifikasi atau ditarik`:"") + (list.length?"":" Claude tidak menambah sumber baru.");
+  const note = (list.length ? `${list.length} sumber terverifikasi (terbit ${nowY-10} atau sesudahnya): ` : "Tidak ada sumber terverifikasi yang cocok. ") + parts.join(" · ") + (O.consensus?` · filter Consensus: jurnal ${qLabel}`:"") + (skipped?` · ${skipped} kandidat dilewati karena metadata tidak bisa diverifikasi atau ditarik`:"") + (list.length?"":(" "+AIN()+" tidak menambah sumber baru."));
   return {list, note};
 }
 function vSrcOptions(){
@@ -1948,7 +2156,7 @@ async function runRevision(){
   try{
     let sources=[];
     if (S.useScite && S.mcp){ const r = await searchSources(ctl.signal); sources=r.list; S.rev.srcNote=r.note; S.rev.srcSt="done"; }
-    else S.rev.srcNote = S.mcp ? "Pencarian sumber dimatikan; Claude tidak menambah sumber baru." : "Konektor literatur tidak tersedia; Claude tidak menambah sumber baru.";
+    else S.rev.srcNote = S.mcp ? ("Pencarian sumber dimatikan; "+AIN()+" tidak menambah sumber baru.") : ("Konektor literatur tidak tersedia; "+AIN()+" tidak menambah sumber baru.");
     S.rev.sources=sources; render();
     const tier = S.aiMode==="teliti" ? "complex" : "default";
     const jobs=[];
@@ -1970,7 +2178,7 @@ async function runRevision(){
           arr(r.tambahan).forEach(c=>{ const i=pid(c.setelah); const t=String(c.teks||"").trim(); if (!t || !valid.has(i)) return; U.changes.push({type:"tambah", pid:i, orig:"", text:t, jenis:/subjudul/i.test(c.jenis)?"subjudul":"paragraf", alasan:String(c.alasan||""), menangani:arr(c.menangani).map(String), acc:true}); });
           arr(r.hapus).forEach(c=>{ const i=pid(c.id); if (!valid.has(i)) return; U.changes.push({type:"hapus", pid:i, orig:M.paras[i].text, text:"", alasan:String(c.alasan||""), menangani:arr(c.menangani).map(String), acc:true}); });
           arr(r.tidak_dapat).forEach(c=>U.cannot.push({temuan:String(c.temuan||""), alasan:String(c.alasan||""), langkah:String(c.langkah||"")}));
-        }catch(e){ if (e&&e.code==="cancelled") throw e; U.err = e&&e.code==="rate_limited" ? "Batas pemakaian Claude tercapai." : e&&e.code==="invalid_json" ? "Jawaban tidak terbaca." : "Gagal direvisi."; }
+        }catch(e){ if (e&&e.code==="cancelled") throw e; U.err = e&&e.code==="rate_limited" ? ("Batas pemakaian "+AIN()+" tercapai.") : e&&e.code==="invalid_json" ? "Jawaban tidak terbaca." : "Gagal direvisi."; }
         if (!jobs.slice(idx).some(j=>j.U===U)) U.st = U.err ? "fail" : "done";
         render();
       }
@@ -2048,19 +2256,19 @@ function revisionReportHTML(){
   const R=S.rev; const d=S.doc;
   const unitsHTML = R.units.map(U=>`<h2>${esc(U.unit)}</h2>${U.changes.length?U.changes.map(c=>`<div class="box"><b>${{ubah:"Diubah",tambah:"Ditambahkan",hapus:"Dihapus"}[c.type]}${c.acc?"":" (ditolak penulis)"}</b> · ${esc(c.alasan)} <small>${c.menangani.join(", ")}</small><br>${c.type==="ubah"?diffWords(c.orig,c.text):c.type==="tambah"?`<ins>${mdInline(c.text)}</ins>`:`<del>${esc(c.orig)}</del>`}</div>`).join(""):"<p>Tidak ada perubahan.</p>"}${U.cannot.length?`<h3>Perlu dikerjakan penulis</h3><ul>${U.cannot.map(x=>`<li><b>${esc(x.temuan)}</b> ${esc(x.alasan)}${x.langkah?` — <i>${esc(x.langkah)}</i>`:""}</li>`).join("")}</ul>`:""}`).join("");
   const srcHTML = R.sources.length ? `<h2>Sumber terverifikasi</h2><p>${esc(R.srcNote)}</p><ol>${R.sources.map(s=>`<li>${mdInline(s.ref)} <small>[${esc([SRC_DB[s.via]||"",s.quartile||""].filter(Boolean).join(" · "))}]</small> ${s.used?"<b>(dikutip dalam revisi)</b>":"<small>(tidak dipakai)</small>"}${s.authorsCapped?" <small>— Scite menampilkan maksimal 3 penulis; periksa daftar penulis lengkap di DOI.</small>":""}</li>`).join("")}</ol>` : `<h2>Sumber</h2><p>${esc(R.srcNote)}</p>`;
-  return `<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Laporan Revisi — ${esc(d.name)}</title><style>${REPORT_CSS}</style></head><body><p style="text-align:center;font-weight:700;color:#1F3864;margin:0">${esc(NOR_BAND)}</p><h1>LAPORAN REVISI NASKAH</h1><p class="sub">${isArt()?"Artikel jurnal · "+esc(jurnalLabel()):"Pedoman KTI 2025"} · ${new Date().toLocaleDateString("id-ID",{day:"numeric",month:"long",year:"numeric"})}</p><p><b>Naskah:</b> ${esc(d.name)}<br><b>Perubahan diterima:</b> ${R.units.reduce((a,U)=>a+U.changes.filter(c=>c.acc).length,0)} dari ${R.units.reduce((a,U)=>a+U.changes.length,0)}</p>${unitsHTML}${srcHTML}<p style="font-size:11px;color:#555;margin-top:24px">Revisi diusulkan oleh Claude berdasarkan temuan sistem, Claude, reviewer, dan editor. Periksa setiap perubahan dan setiap penanda [LENGKAPI: …] sebelum naskah diajukan.</p></body></html>`;
+  return `<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Laporan Revisi — ${esc(d.name)}</title><style>${REPORT_CSS}</style></head><body><p style="text-align:center;font-weight:700;color:#1F3864;margin:0">${esc(NOR_BAND)}</p><h1>LAPORAN REVISI NASKAH</h1><p class="sub">${isArt()?"Artikel jurnal · "+esc(jurnalLabel()):"Pedoman KTI 2025"} · ${new Date().toLocaleDateString("id-ID",{day:"numeric",month:"long",year:"numeric"})}</p><p><b>Naskah:</b> ${esc(d.name)}<br><b>Perubahan diterima:</b> ${R.units.reduce((a,U)=>a+U.changes.filter(c=>c.acc).length,0)} dari ${R.units.reduce((a,U)=>a+U.changes.length,0)}</p>${unitsHTML}${srcHTML}<p style="font-size:11px;color:#555;margin-top:24px">Revisi diusulkan oleh ${AIN()} berdasarkan temuan sistem, ${AIN()}, reviewer, dan editor. Periksa setiap perubahan dan setiap penanda [LENGKAPI: …] sebelum naskah diajukan.</p></body></html>`;
 }
 function vRevisi(){ return (S.local ? vInstant() : "") + vRevisiBase(); }
 function vRevisiBase(){
-  if (!S.sample) return `<div class="card"><h3>Revisi naskah</h3><div class="notice">${icon(IC.info)}<div>${S.sampleChecked?"<b>Fitur revisi hanya dapat digunakan saat terhubung dengan Claude.</b> Buka halaman ini di claude.ai atau aplikasi Claude dengan akun Anda; revisi memakai kuota akun Claude Anda.":"Menghubungkan ke Claude…"}</div></div></div>`;
+  if (!S.sample) return `<div class="card"><h3>Revisi naskah</h3><div class="notice">${icon(IC.info)}<div>${S.sampleChecked?aiNA("<b>Fitur revisi memerlukan konektor AI.</b>"):("Menghubungkan ke "+AIN()+"…")}</div></div></div>`;
   const L=S.local; const R=S.rev; const art=isArt();
   const units = unitsForRevision();
   if (!S.revSel) S.revSel = units.filter(u=>findingsForUnit(u).length);
   const nSys = L.all.filter(f=>f.sev==="error"||f.sev==="warning").length;
   const nAI = S.ai ? S.ai.findings.length + (S.ai.petunjuk?S.ai.petunjuk.length:0) : 0;
-  const setup = `<div class="card"><h3>Revisi naskah dengan Claude<span class="r">memakai kuota akun Claude Anda</span></h3>
-    <div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">${[["Temuan sistem",nSys,"revisi + perhatian",IC.check],[art?"Temuan reviewer":"Temuan Claude",nAI,S.ai?(art?"komentar + petunjuk editor":"temuan tinjauan"):"belum dijalankan",IC.quote],["Sumber literatur",S.mcp?`${Object.keys(SRC_DB).filter(k=>srcOpt()[k]).length} basis data`:"—",S.mcp?Object.keys(SRC_DB).filter(k=>srcOpt()[k]).map(k=>SRC_DB[k]).join(" · ")||"tidak ada yang dipilih":"konektor tidak tersedia",IC.doc]].map(([l,v,x,d])=>`<div class="kpi"><div class="ic">${icon(d)}</div><div><div class="lb">${l}</div><div class="v">${v}</div><div class="s">${x}</div></div></div>`).join("")}</div>
-    ${!S.ai?`<div class="notice" style="margin-top:12px">${icon(IC.info)}<div>Revisi akan lebih lengkap bila ${art?"review reviewer":"tinjauan Claude"} dijalankan lebih dulu. <button class="linkish" data-view="ai">Buka ${art?"Review Reviewer":"Tinjauan Claude"} →</button></div></div>`:""}
+  const setup = `<div class="card"><h3>Revisi naskah dengan ${AIN()}<span class="r">memakai ${AIQ()}</span></h3>
+    <div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">${[["Temuan sistem",nSys,"revisi + perhatian",IC.check],[art?"Temuan reviewer":("Temuan "+AIN()),nAI,S.ai?(art?"komentar + petunjuk editor":"temuan tinjauan"):"belum dijalankan",IC.quote],["Sumber literatur",S.mcp?`${Object.keys(SRC_DB).filter(k=>srcOpt()[k]).length} basis data`:"—",S.mcp?Object.keys(SRC_DB).filter(k=>srcOpt()[k]).map(k=>SRC_DB[k]).join(" · ")||"tidak ada yang dipilih":"konektor tidak tersedia",IC.doc]].map(([l,v,x,d])=>`<div class="kpi"><div class="ic">${icon(d)}</div><div><div class="lb">${l}</div><div class="v">${v}</div><div class="s">${x}</div></div></div>`).join("")}</div>
+    ${!S.ai?`<div class="notice" style="margin-top:12px">${icon(IC.info)}<div>Revisi akan lebih lengkap bila ${art?"review reviewer":("tinjauan "+AIN())} dijalankan lebih dulu. <button class="linkish" data-view="ai">Buka ${art?"Review Reviewer":("Tinjauan "+AIN())} →</button></div></div>`:""}
     <p class="small muted" style="margin:14px 0 6px"><b>${art?"Bagian":"Bab"} yang direvisi</b> (angka = jumlah temuan):</p>
     <div class="babnav">${units.map(u=>{ const n=findingsForUnit(u).length; return `<button aria-pressed="${S.revSel.includes(u)}" data-revsel="${esc(u)}">${esc(u)} · ${n}</button>`; }).join("")}</div>
     <div class="toolbar" style="margin:12px 0 0">
@@ -2068,7 +2276,7 @@ function vRevisiBase(){
       <label class="toggle" style="padding:7px 10px"><input type="checkbox" id="useScite" ${S.useScite&&S.mcp?"checked":""} ${S.mcp?"":"disabled"}><span class="small"><b>Cari sumber valid (Scite, Consensus, SciSpace)</b></span></label>
       ${R&&R.busy?`<button class="btn sm" data-act="revstop">Hentikan</button>`:`<button class="btn primary" data-act="revrun" ${S.revSel.length?"":"disabled"}>${R&&R.done?"Revisi ulang":"Mulai revisi"}</button>`}
     </div>${vSrcOptions()}
-    <p class="small muted" style="margin:10px 0 0">Claude merevisi setiap ${art?"bagian":"bab"} terpisah agar presisi: menyelesaikan temuan, merapikan bahasa dan sitasi, tanpa mengarang data. Bagian yang butuh data Anda ditandai <b>[LENGKAPI: …]</b>. ${S.mcp?"Sumber baru hanya diambil dari Scite, Consensus, dan SciSpace: terbit 10 tahun terakhir, bukan preprint, tidak ditarik, dan metadata (DOI, penulis, jurnal) dicocokkan ke Scite. Consensus disaring ke jurnal berperingkat SCImago (data Scopus) sesuai kuartil pilihan.":"Tanpa konektor literatur, Claude tidak menambah sumber baru agar tidak ada rujukan fiktif. Hubungkan Scite, Consensus, atau SciSpace di claude.ai → Pengaturan → Konektor."}</p>
+    <p class="small muted" style="margin:10px 0 0">${AIN()} merevisi setiap ${art?"bagian":"bab"} terpisah agar presisi: menyelesaikan temuan, merapikan bahasa dan sitasi, tanpa mengarang data. Bagian yang butuh data Anda ditandai <b>[LENGKAPI: …]</b>. ${S.mcp?"Sumber baru hanya diambil dari Scite, Consensus, dan SciSpace: terbit 10 tahun terakhir, bukan preprint, tidak ditarik, dan metadata (DOI, penulis, jurnal) dicocokkan ke Scite. Consensus disaring ke jurnal berperingkat SCImago (data Scopus) sesuai kuartil pilihan.":"Tanpa konektor literatur, Claude tidak menambah sumber baru agar tidak ada rujukan fiktif. Hubungkan Scite, Consensus, atau SciSpace di claude.ai → Pengaturan → Konektor."}</p>
   </div>`;
   if (!R) return setup;
   const stIcon = st => st==="run"?`<div class="spinner"></div>`:st==="done"?`<span class="dot sev-ok">${icon(IC.check)}</span>`:st==="fail"?`<span class="dot sev-error">${icon(IC.x)}</span>`:st==="skip"?`<span class="dot sev-info" style="opacity:.4">${icon(IC.x)}</span>`:`<span class="dot sev-info" style="opacity:.4">${icon("M12 12h.01")}</span>`;
@@ -2146,7 +2354,7 @@ function ceCompliance(E){
   ok(wi && wi<=150 && !countCites(E.abstrak_id), `ABSTRAK ${wi} kata, tanpa kutipan`, wi?"Maksimal 150 kata, tanpa kutipan.":"ABSTRAK kosong.");
   ok(E.keywords_en.length>=3 && E.keywords_en.length<=5 && !E.keywords_en.some(k=>/[A-Z]/.test(k) && !/^[A-Z0-9\-]{2,6}$/.test(k)), `Keywords ${E.keywords_en.length} kata, huruf kecil`, "3–5 kata, huruf kecil.");
   ok(E.kata_kunci_id.length>=3 && E.kata_kunci_id.length<=5 && !E.kata_kunci_id.some(k=>/[A-Z]/.test(k) && !/^[A-Z0-9\-]{2,6}$/.test(k)), `Kata kunci ${E.kata_kunci_id.length} kata, huruf kecil`, "3–5 kata, huruf kecil.");
-  E.sections.forEach(s=>ok(s.blocks.some(b=>b.t==="p"||b.t==="li"), `Bagian ${s.key} berisi`, s.key==="PEMBAHASAN"&&E.combined?"Hasil dan pembahasan masih tergabung; pisahkan dengan copyedit Claude.":"Bagian ini kosong."));
+  E.sections.forEach(s=>ok(s.blocks.some(b=>b.t==="p"||b.t==="li"), `Bagian ${s.key} berisi`, s.key==="PEMBAHASAN"&&E.combined?("Hasil dan pembahasan masih tergabung; pisahkan dengan copyedit "+AIN()+"."):"Bagian ini kosong."));
   const met=E.sections.find(s=>s.key==="METODE"); ok(!met.blocks.some(b=>b.t==="li"), "Metode berbentuk paragraf", "Lebur butir metode menjadi paragraf.");
   const kes=E.sections.find(s=>s.key==="KESIMPULAN DAN SARAN"); ok(!kes.blocks.some(b=>b.t==="p"&&/\d/.test(b.text)), "Kesimpulan tanpa angka", "Hapus angka dari kesimpulan.");
   ok(!E.sections.some(s=>s.blocks.some(b=>(b.t==="h2"||b.t==="h3") && SUBNUM.test(b.text))), "Subjudul tanpa nomor", "Hapus nomor subjudul.");
@@ -2156,14 +2364,14 @@ function ceCompliance(E){
 async function ceExtract(){
   const C=ceState(); C.err=""; C.notes=[];
   if (!isArt()){
-    if (!S.sample){ C.err="Naskah skripsi/proposal perlu diringkas menjadi artikel oleh Claude. Buka halaman ini di claude.ai atau aplikasi Claude."; C.E=null; return render(); }
+    if (!S.sample){ C.err=aiNA("Naskah skripsi/proposal perlu diringkas menjadi artikel oleh AI."); C.E=null; return render(); }
     return ceConvertKTI();
   }
   C.E = extractArticle(C.src); C.notes=[{t:"Ekstraksi",n:"Naskah dipetakan ke template: judul, penulis, institusi, e-mail, ABSTRACT/ABSTRAK, kata kunci, cara mengutip, lima bagian isi, dan daftar rujukan."}];
   render();
 }
 async function ceConvertKTI(){
-  const C=ceState(); C.busy=true; C.prog="Claude meringkas naskah menjadi artikel sesuai template…"; C.ctl=new AbortController(); render();
+  const C=ceState(); C.busy=true; C.prog=(AIN()+" meringkas naskah menjadi artikel sesuai template…"); C.ctl=new AbortController(); render();
   const figMap={}; let fn=0;
   const text = (()=>{ const ps=sourceParas(C.src); let s=""; for (const p of ps){ if (p.tag==="img"){ const ref="F"+(++fn); figMap[ref]=p.img; s+=`[GAMBAR ${ref}]\n`; continue; } if (!p.text) continue; const line=(p.tag==="h"?"### ":p.tag==="table"?"[TABEL] ":p.tag==="li"?"- ":"")+p.text; if (s.length+line.length>90000){ s+="\n[…dipotong…]"; break; } s+=line+"\n"; } return s; })();
   const prompt = `Ubah naskah ${S.tahap.toLowerCase()} skripsi berikut menjadi ARTIKEL JURNAL sesuai template ${CE_JOURNAL}.
@@ -2185,9 +2393,9 @@ NASKAH:
 ${text}
 """`;
   try{
-    const r = await S.sample.json(prompt, {modelTier: S.aiMode==="teliti"?"complex":"default", cache:false, signal:C.ctl.signal, onText:({text})=>{ C.prog=`Claude menulis artikel… ${text.length.toLocaleString("id-ID")} karakter`; if(S.view==="copyedit") render(); }});
-    C.E = normE(r); C.E.sections.forEach(sec=>sec.blocks.forEach(b=>{ if (b.t==="figure" && b.ref && figMap[b.ref]) b.img=figMap[b.ref]; })); C.notes=[{t:"Konversi",n:"Skripsi diringkas menjadi artikel oleh Claude."}, ...(Array.isArray(r.catatan)?r.catatan.map(n=>({t:"Claude",n:String(n)})):[])];
-  }catch(e){ C.err = e&&e.code==="cancelled" ? "" : e&&e.code==="rate_limited" ? "Batas pemakaian Claude tercapai." : "Konversi gagal. Coba lagi atau pilih mode Cepat."; }
+    const r = await S.sample.json(prompt, {modelTier: S.aiMode==="teliti"?"complex":"default", cache:false, signal:C.ctl.signal, onText:({text})=>{ C.prog=`${AIN()} menulis artikel… ${text.length.toLocaleString("id-ID")} karakter`; if(S.view==="copyedit") render(); }});
+    C.E = normE(r); C.E.sections.forEach(sec=>sec.blocks.forEach(b=>{ if (b.t==="figure" && b.ref && figMap[b.ref]) b.img=figMap[b.ref]; })); C.notes=[{t:"Konversi",n:("Skripsi diringkas menjadi artikel oleh "+AIN()+".")}, ...(Array.isArray(r.catatan)?r.catatan.map(n=>({t:"Claude",n:String(n)})):[])];
+  }catch(e){ C.err = e&&e.code==="cancelled" ? "" : e&&e.code==="rate_limited" ? ("Batas pemakaian "+AIN()+" tercapai.") : "Konversi gagal. Coba lagi atau pilih mode Cepat."; }
   finally{ C.busy=false; C.prog=""; render(); }
 }
 function normE(r){
@@ -2212,7 +2420,7 @@ async function ceCopyedit(){
       const restore = arr => arr.map(b=>{ if (b.t==="figure" && b.ref && imgMap[b.ref]){ const o=imgMap[b.ref]; delete imgMap[b.ref]; return Object.assign({}, o, {caption:b.caption||o.caption}); } return b; });
       const nb=restore((Array.isArray(r.blocks)?r.blocks:[]).map(normBlock).filter(Boolean)); let pb=[];
       if (split && Array.isArray(r.pembahasan)) pb = restore(r.pembahasan.map(normBlock).filter(Boolean));
-      const lost = Object.values(imgMap); if (lost.length){ nb.push(...lost); notes.push({t:s.key, n:`${lost.length} gambar yang tidak dikembalikan Claude disisipkan di akhir bagian ini; periksa posisinya.`}); }
+      const lost = Object.values(imgMap); if (lost.length){ nb.push(...lost); notes.push({t:s.key, n:`${lost.length} gambar yang tidak dikembalikan ${AIN()} disisipkan di akhir bagian ini; periksa posisinya.`}); }
       if (nb.length) s.blocks=nb;
       if (pb.length){ E.sections.find(x=>x.key==="PEMBAHASAN").blocks=pb; E.combined=false; }
       (r.catatan||[]).forEach(x=>notes.push({t:s.key,n:String(x)}));
@@ -2365,14 +2573,14 @@ function vCopyedit(){
     <p class="small muted" style="margin:-4px 0 12px">Naskah diekstrak per subbab, dirapikan, lalu dikemas ulang memakai berkas template asli: header halaman pertama, header "Nama Pengarang - Judul", footer bernomor halaman, margin 3,5–3–3–3 cm, Arial Narrow, tabel abstrak abu-abu, bingkai "Cara mengutip", dan daftar rujukan berindentasi gantung.</p>
     <div class="toolbar" style="margin-bottom:10px"><span class="small muted">Sumber naskah:</span>${seg("cesrc",C.src,[["upload","Naskah unggahan"],["revisi",hasRev?"Hasil revisi (perubahan diterima)":"Hasil revisi (belum ada)",!hasRev],["instan",S.inst&&S.inst.done?"Hasil revisi instan":"Revisi instan (belum ada)",!(S.inst&&S.inst.done)]])}${seg("mode",S.aiMode,[["teliti","Teliti"],["cepat","Cepat"]])}</div>
     <div class="toolbar" style="margin-bottom:10px"><span class="small muted">Footer halaman 2 dst.:</span>${seg("cefooter",C.meta.footer||"oddRight",Object.entries(FTR_SIDES))}<span class="small muted">Header: nama lengkap penulis (tebal miring) dan judul satu baris.</span></div>
-    ${!art?`<div class="notice" style="margin-bottom:10px">${icon(IC.info)}<div>Dokumen terpilih adalah <b>${esc(S.tahap.toLowerCase())} skripsi</b>. Claude akan meringkasnya menjadi artikel (pendahuluan dari BAB I–II, metode dari BAB III, hasil dan pembahasan dari BAB IV, kesimpulan dari BAB V) tanpa mengarang data.</div></div>`:""}
+    ${!art?`<div class="notice" style="margin-bottom:10px">${icon(IC.info)}<div>Dokumen terpilih adalah <b>${esc(S.tahap.toLowerCase())} skripsi</b>. ${AIN()} akan meringkasnya menjadi artikel (pendahuluan dari BAB I–II, metode dari BAB III, hasil dan pembahasan dari BAB IV, kesimpulan dari BAB V) tanpa mengarang data.</div></div>`:""}
     <div class="grid" style="gap:10px;margin-bottom:10px">${[["tahun","Tahun terbit"],["vol","Volume"],["no","Nomor"],["reg","Nomor register"],["hal","Halaman (mis. 68-77)"]].map(([k,l])=>`<div class="${k==="hal"||k==="reg"?"c6":"c4"}"><label class="small muted" for="ce_${k}">${l}</label><input id="ce_${k}" data-cemeta="${k}" value="${esc(C.meta[k]||"")}" placeholder="${k==="reg"?"mis. 28213":"opsional"}" style="width:100%;margin-top:4px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:13px"></div>`).join("")}${doiLiveBox("DOI (otomatis; dipakai di cara mengutip dan LOA)")}</div>
     <div class="toolbar" style="margin:0">
       <button class="btn ${C.E?"":"primary"}" data-act="ceextract" ${C.busy?"disabled":""}>${art?"Ekstrak ulang per subbab":"Ringkas menjadi artikel"}</button>
-      ${C.busy?`<button class="btn sm" data-act="cestop">Hentikan</button>`:`<button class="btn ${C.E&&!C.edited&&!S.finalMode?"primary":""}" data-act="cecopyedit" ${C.E&&S.sample?"":"disabled"} title="${S.sample?"":"Copyedit memerlukan koneksi ke Claude"}">Copyedit dengan Claude</button>`}
+      ${C.busy?`<button class="btn sm" data-act="cestop">Hentikan</button>`:`<button class="btn ${C.E&&!C.edited&&!S.finalMode?"primary":""}" data-act="cecopyedit" ${C.E&&S.sample?"":"disabled"} title="${S.sample?"":("Copyedit memerlukan koneksi ke "+AIN())}">Copyedit dengan ${AIN()}</button>`}
       <button class="btn ${C.edited||S.finalMode?"primary":""}" data-act="cedownload" ${C.E&&!C.busy?"":"disabled"}>Unduh artikel sesuai template (.docx)</button>
     </div>
-    ${!S.sample?`<p class="small muted" style="margin:8px 0 0">Ekstraksi dan pengemasan template berjalan tanpa Claude. Copyedit bahasa, pemisahan Hasil/Pembahasan, dan peringkasan skripsi memerlukan koneksi ke Claude.</p>`:""}
+    ${!S.sample?`<p class="small muted" style="margin:8px 0 0">Ekstraksi dan pengemasan template berjalan tanpa ${AIN()}. Copyedit bahasa, pemisahan Hasil/Pembahasan, dan peringkasan skripsi memerlukan koneksi ke ${AIN()}.</p>`:""}
     ${C.busy?`<div class="upstate busy" role="status"><div class="spinner"></div><div>${esc(C.prog)}</div></div>`:""}
     ${C.err?`<div class="upstate err" role="alert">${icon(IC.warn)}<div>${esc(C.err)}</div></div>`:""}
   </div>`;
@@ -2694,7 +2902,7 @@ async function buildCommentedDocx(only){
   let nextId = 0; (cXml.match(/w:id="(\d+)"/g)||[]).forEach(m=>{ nextId=Math.max(nextId, +m.replace(/\D/g,"")+1); });
   const date = new Date().toISOString().replace(/\.\d+Z$/,"Z");
   const memo=new Map(); const scopeCount={};
-  let comments = reviewComments(only); if (cmtOpt().sederhana && S.sample){ if (S.view==="ai") toast("Claude menyederhanakan bahasa komentar…"); comments = await simplifyComments(comments); } let placed=0, general=0, out="";
+  let comments = reviewComments(only); if (cmtOpt().sederhana && S.sample){ if (S.view==="ai") toast((AIN()+" menyederhanakan bahasa komentar…")); comments = await simplifyComments(comments); } let placed=0, general=0, out="";
   for (const c of comments){
     const id=nextId++; const wants = c.p!=null || c.quote || c.scope==="bagian"; let loc = wants ? locateScope(paras, cache, c, memo) : null;
     if (!loc){ loc={i1:titleIdx, i2:titleIdx}; general++; if (wants && c.kat) c.lines[0] = `Catatan untuk bagian ${plainText(c.kat).toLowerCase()}: ` + c.lines[0][0].toLowerCase() + c.lines[0].slice(1); } else { placed++; scopeCount[loc.scope]=(scopeCount[loc.scope]||0)+1; }
@@ -2736,7 +2944,7 @@ function vReviewDl(){
   return `<div class="card" style="margin-bottom:16px"><h3>Unduh hasil review<span class="r">Microsoft Word</span></h3>
     <p class="small muted" style="margin:0 0 10px">Nama di bawah dipakai sebagai nama pemberi komentar di balon Word dan di laporan. Kosongkan untuk memakai nama bawaan.</p>
     <div class="grid" style="gap:10px">${revLabels().map(l=>`<div class="c${rev?(ai.n===3?"3":ai.n===2?"4":"6"):"6"}"><label class="small muted" for="rn_${esc(l.replace(/\s/g,""))}">${esc(l)}</label><input id="rn_${esc(l.replace(/\s/g,""))}" data-revname="${esc(l)}" value="${esc(revNames()[l]||"")}" placeholder="${esc(l)}" style="width:100%;margin-top:4px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:13px"></div>`).join("")}</div>
-    <div class="toolbar" style="margin:12px 0 0">${rev?`<label class="toggle" style="padding:6px 10px"><input type="checkbox" data-cmtopt="umum" ${O.umum?"checked":""}><span class="small"><b>Ringkasan tiap reviewer</b> di judul</span></label><label class="toggle" style="padding:6px 10px"><input type="checkbox" data-cmtopt="editor" ${O.editor?"checked":""}><span class="small"><b>Keputusan & petunjuk editor</b></span></label>`:""}<label class="toggle" style="padding:6px 10px"><input type="checkbox" data-cmtopt="sistem" ${O.sistem?"checked":""}><span class="small"><b>Temuan pemeriksaan sistem</b></span></label><label class="toggle" style="padding:6px 10px"><input type="checkbox" data-cmtopt="sederhana" ${O.sederhana&&S.sample?"checked":""} ${S.sample?"":"disabled"}><span class="small"><b>Sederhanakan bahasa</b> dengan Claude</span></label></div>
+    <div class="toolbar" style="margin:12px 0 0">${rev?`<label class="toggle" style="padding:6px 10px"><input type="checkbox" data-cmtopt="umum" ${O.umum?"checked":""}><span class="small"><b>Ringkasan tiap reviewer</b> di judul</span></label><label class="toggle" style="padding:6px 10px"><input type="checkbox" data-cmtopt="editor" ${O.editor?"checked":""}><span class="small"><b>Keputusan & petunjuk editor</b></span></label>`:""}<label class="toggle" style="padding:6px 10px"><input type="checkbox" data-cmtopt="sistem" ${O.sistem?"checked":""}><span class="small"><b>Temuan pemeriksaan sistem</b></span></label><label class="toggle" style="padding:6px 10px"><input type="checkbox" data-cmtopt="sederhana" ${O.sederhana&&S.sample?"checked":""} ${S.sample?"":"disabled"}><span class="small"><b>Sederhanakan bahasa</b> dengan ${AIN()}</span></label></div>
     <div class="small muted" style="margin:14px 0 6px"><b>Artikel dengan komentar balon (.docx)</b>: satu berkas untuk setiap reviewer, seolah masing-masing reviewer mengirim hasil reviewnya sendiri.</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">${revLabels().map(l=>{ const n=reviewComments(l).length; return `<button class="btn ${l==="Editor"?"":"primary"}" data-act="rvone" data-who="${esc(l)}" ${n?"":"disabled"}>${esc(revName(l))} · ${n} komentar</button>`; }).join("")}${rev&&revLabels().length>2?`<button class="btn" data-act="rvall">Unduh semua per reviewer</button><button class="btn" data-act="rvdoc">Gabungan semua reviewer</button>`:""}</div>
     <div class="small muted" style="margin:14px 0 6px"><b>Laporan</b></div>
@@ -2829,7 +3037,7 @@ function checkLanguage(M, hasEm){
   out.forEach(f=>{ if (f.occ && f.occ.length){ f.p=f.occ[0].p; f.quote=f.occ[0].q; if (f.occ.length>1 && !/ · \d+×$/.test(f.title)) f.title += ` · ${f.occ.length}×`; } if (!f.lang) f.lang="id"; if (f.lang==="en" && !/^\(EN\)/.test(f.detail||"")) f.detail = "Bahasa Inggris. "+(f.detail||""); });
   const order={error:0,warning:1,info:2};
   out.sort((a,b)=>order[a.sev]-order[b.sev] || (b.occ?b.occ.length:0)-(a.occ?a.occ.length:0));
-  if (!out.some(f=>f.sev!=="info")) out.unshift(F("bahasa","ok","Tidak ditemukan kesalahan dari daftar periksa", `Diperiksa: ${M.langStats.id} paragraf bahasa Indonesia dan ${M.langStats.en} paragraf bahasa Inggris. Typo lain diperiksa oleh Claude.`));
+  if (!out.some(f=>f.sev!=="info")) out.unshift(F("bahasa","ok","Tidak ditemukan kesalahan dari daftar periksa", `Diperiksa: ${M.langStats.id} paragraf bahasa Indonesia dan ${M.langStats.en} paragraf bahasa Inggris. Typo lain diperiksa oleh ${AIN()}.`));
   return out;
 }
 function vLangPick(compact){
@@ -3115,7 +3323,7 @@ function vReviewSetup(open){
     ${n>1?`<label class="toggle" style="margin-top:10px;padding:8px 12px"><input type="checkbox" id="revNoDup" ${S.revNoDup!==false?"checked":""}><span class="small"><b>Reviewer tidak mengulang komentar yang sama</b><br><span class="muted">Setiap reviewer diberi tahu pembagian fokusnya, dan komentar yang tetap mirip antarreviewer dibuang otomatis.</span></span></label>`:""}
     <label class="small muted" for="revNote" style="display:block;margin:16px 0 6px">Instruksi tambahan untuk semua reviewer (opsional)</label>
     <textarea id="revNote" rows="3" placeholder="Contoh: perhatikan kebaruan penelitian dan kesesuaian metode statistik; abaikan format sitasi." style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:13px;font-family:inherit">${esc(S.revNote||"")}</textarea>
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:16px">${S.aiBusy?`<button class="btn" data-act="stop">Hentikan review</button>`:`<button class="btn primary bigbtn" data-act="ai" ${sel.length?"":"disabled"}>${icon("M8 5v14l11-7L8 5Z")}${S.ai&&S.ai.mode==="review"?"Jalankan review ulang":"Mulai review"}</button>`}<span class="small muted">${n} reviewer + editor · ${sel.length} bagian · ${n+1} permintaan ke Claude (biasanya 2–4 menit).</span></div>`;
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:16px">${S.aiBusy?`<button class="btn" data-act="stop">Hentikan review</button>`:`<button class="btn primary bigbtn" data-act="ai" ${sel.length?"":"disabled"}>${icon("M8 5v14l11-7L8 5Z")}${S.ai&&S.ai.mode==="review"?"Jalankan review ulang":"Mulai review"}</button>`}<span class="small muted">${n} reviewer + editor · ${sel.length} bagian · ${n+1} permintaan ke ${AIN()} (biasanya 2–4 menit).</span></div>`;
   return open
     ? `<div class="card" style="margin-bottom:16px"><h3>Pengaturan review<span class="r">atur dulu, lalu tekan Mulai review</span></h3>${body}</div>`
     : `<details class="card" style="margin-bottom:16px"><summary style="cursor:pointer;font-weight:700;font-size:13px;letter-spacing:.06em;text-transform:uppercase">Pengaturan review · ubah lalu jalankan ulang</summary><div style="margin-top:14px">${body}</div></details>`;
@@ -3207,7 +3415,7 @@ async function runActivity(){
   const rows = items.map(it=>{ const pa = bestPara(C.docs.awal.paras, it); const pb = pa ? pairOf.get(pa) : bestPara(C.docs.akhir.paras, it); const changed = pa ? (!pb || normSp(pa.text)!==normSp(pb.text)) : !!pb;
     return {id:"A"+it.k, it, before:pa?pa.text:"", after:pb?pb.text:"", status: !pa && !pb ? "tidak_terlacak" : changed ? "berubah" : "belum", perubahan:"", bukti:"", catatan:"", ai:false}; });
   C.act = {rows, busy:!!S.sample, note:""}; render();
-  if (!S.sample){ C.act.note="Status dihitung dari ada/tidaknya perubahan pada bagian yang dirujuk. Buka di claude.ai agar Claude menilai apakah perubahan benar-benar menjawab saran."; return render(); }
+  if (!S.sample){ C.act.note=aiNA("Status dihitung dari ada/tidaknya perubahan pada bagian yang dirujuk."); return render(); }
   const ctl = new AbortController(); C.ctl=ctl;
   try{
     for (let i=0;i<rows.length;i+=12){
@@ -3224,7 +3432,7 @@ ${JSON.stringify(part.map((x,k)=>({i:k, saran:x.it.text.slice(0,700), bagian_dir
       (Array.isArray(r)?r:[]).forEach(x=>{ const row=part[+x.i]; if (!row) return; if (["dilaksanakan","sebagian","belum","tidak_terlacak"].includes(x.status)) row.status=x.status; row.perubahan=String(x.perubahan||""); row.catatan=String(x.catatan||""); const bk=String(x.bukti||""); row.bukti = bk && normSp(row.after).includes(normSp(bk).slice(0,60)) ? bk : ""; row.ai=true; });
       render();
     }
-  }catch(e){ if (!(e&&e.code==="cancelled")) C.act.note="Penilaian Claude terhenti; status sisanya dihitung dari ada/tidaknya perubahan."; }
+  }catch(e){ if (!(e&&e.code==="cancelled")) C.act.note=("Penilaian "+AIN()+" terhenti; status sisanya dihitung dari ada/tidaknya perubahan."); }
   C.act.busy=false; C.ctl=null; render();
 }
 const ACT_LAB = {dilaksanakan:["Dilaksanakan","ok"], sebagian:["Sebagian","warning"], belum:["Belum","error"], berubah:["Ada perubahan","warning"], tidak_terlacak:["Tidak terlacak","info"]};
@@ -3234,7 +3442,7 @@ function vBanding(){
     ${d?`<p class="small" style="margin:0 0 8px"><b>${esc(d.name)}</b><br><span class="muted">${d.paras.length} paragraf${d.comments&&d.comments.length?` · ${d.comments.length} komentar Word`:""}</span></p>`:`<p class="small muted" style="margin:0 0 8px">${k==="review"?"Hasil review (.docx dengan komentar balon, laporan review, atau surat editor).":"Berkas .docx, .pdf, atau .txt."}</p>`}
     <div style="display:flex;gap:6px;flex-wrap:wrap"><label class="btn sm ${d?"":"primary"}" style="position:relative;overflow:hidden">${d?"Ganti":"Unggah"}<input type="file" data-cmpslot="${k}" accept=".docx,.pdf,.txt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf,text/plain" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>${k==="awal"&&S.doc&&!d?`<button class="btn sm" data-act="cmpcur">Pakai naskah yang sedang dianalisis</button>`:""}${d?`<button class="btn sm" data-cmpclear="${k}">Hapus</button>`:""}</div></div></div>`; };
   let html = `<section class="grid" style="margin-bottom:16px">${["awal","review","akhir"].map(slot).join("")}</section>
-    <div class="toolbar" style="margin-bottom:16px"><button class="btn primary" data-act="cmprun" ${C.docs.awal&&C.docs.akhir&&!C.busy?"":"disabled"}>${C.busy?`<span class="spinner" style="width:14px;height:14px"></span>${esc(C.busy)}`:"Bandingkan dan analisis revisi"}</button><span class="small muted">Perbedaan redaksi dihitung di perangkat Anda. Bila dokumen review diunggah, ${S.sample?"Claude menilai apakah setiap saran sudah dikerjakan.":"status saran dihitung dari ada/tidaknya perubahan (buka di claude.ai untuk penilaian Claude)."}</span></div>
+    <div class="toolbar" style="margin-bottom:16px"><button class="btn primary" data-act="cmprun" ${C.docs.awal&&C.docs.akhir&&!C.busy?"":"disabled"}>${C.busy?`<span class="spinner" style="width:14px;height:14px"></span>${esc(C.busy)}`:"Bandingkan dan analisis revisi"}</button><span class="small muted">Perbedaan redaksi dihitung di perangkat Anda. Bila dokumen review diunggah, ${S.sample?(AIN()+" menilai apakah setiap saran sudah dikerjakan."):("status saran dihitung dari ada/tidaknya perubahan (hubungkan konektor AI untuk penilaian AI).")}</span></div>
     ${C.err?`<div class="notice err" style="margin-bottom:16px">${icon(IC.warn)}<div>${esc(C.err)}</div></div>`:""}`;
   if (!C.res) return html;
   const s=C.res.stats;
@@ -3242,7 +3450,7 @@ function vBanding(){
   if (C.res.bySec.length) html += `<div class="card" style="margin-top:16px"><h3>Sebaran perubahan per bagian</h3><div class="tbl-wrap"><table><thead><tr><th>Bagian</th><th>Diubah</th><th>Ditambah</th><th>Dihapus</th><th>Kata terdampak</th></tr></thead><tbody>${C.res.bySec.map(b=>`<tr><td style="text-align:left">${esc(b.sec)}</td><td>${b.chg}</td><td>${b.add}</td><td>${b.del}</td><td>${b.words}</td></tr>`).join("")}</tbody></table></div></div>`;
   if (C.act){
     const R=C.act.rows; const RI=R.filter(incl); const cnt=k=>RI.filter(r=>r.status===k).length; const done=cnt("dilaksanakan");
-    html += `<div class="card" style="margin-top:16px"><h3>Analisis aktivitas revisi<span class="r">${C.act.busy?"Claude menilai…":RI.length?`${done} dari ${RI.length} saran tercentang dilaksanakan (${pct(done,RI.length)}%)`:""}</span></h3>
+    html += `<div class="card" style="margin-top:16px"><h3>Analisis aktivitas revisi<span class="r">${C.act.busy?(AIN()+" menilai…"):RI.length?`${done} dari ${RI.length} saran tercentang dilaksanakan (${pct(done,RI.length)}%)`:""}</span></h3>
       ${C.act.note?`<p class="small muted" style="margin:0 0 10px">${esc(C.act.note)}</p>`:""}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${Object.entries(ACT_LAB).filter(([k])=>cnt(k)).map(([k,[l,sv]])=>sevPill(sv,`${l}: ${cnt(k)}`)).join("")}</div>
       ${inclBar("act","Saran yang disertakan dalam laporan")}
@@ -3274,7 +3482,7 @@ async function buildTrackedDocx(){
 const gramState = () => S.gram || (S.gram = {busy:false, items:null, err:"", prog:""});
 async function runGrammar(){
   const G=gramState(); if (G.busy || !S.local) return;
-  if (!S.sample){ G.err="Cek grammar memakai Claude. Buka halaman ini di claude.ai atau aplikasi Claude."; return render(); }
+  if (!S.sample){ G.err=aiNA("Cek grammar memakai AI."); return render(); }
   const M=S.local.M; const paras=M.paras.filter(p=>p.text && p.tag!=="table" && p.region!=="pustaka" && !p.isHead && !p.toc && p.text.length>40);
   if (!paras.some(p=>p.lang)) checkLanguage(M, false);
   G.busy=true; G.err=""; G.items=[]; G.ctl=new AbortController(); render();
@@ -3300,8 +3508,8 @@ function vGrammar(){
   const G=gramState(); const st=S.local.M.langStats;
   const local = S.local.all.filter(f=>f.cat==="bahasa" && f.sev!=="ok" && f.sev!=="info");
   let html = `<div class="card" style="margin-bottom:16px"><h3>Cek grammar bahasa Indonesia dan Inggris<span class="r">${st?`${st.id} paragraf ID · ${st.en} paragraf EN`:""}</span></h3>
-    <p class="small muted" style="margin:0 0 10px">Claude memeriksa tata bahasa setiap paragraf sesuai bahasanya: kalimat tidak efektif, imbuhan, kata depan, dan konjungsi untuk bahasa Indonesia; agreement, tense, article, preposition, dan run-on untuk bahasa Inggris. Setiap temuan dicocokkan ke kalimat aslinya. Typo, tanda baca, dan istilah dari daftar periksa ada di halaman Ejaan & Diksi (${local.length} temuan).</p>
-    <div class="toolbar" style="margin:0">${G.busy?`<button class="btn sm" data-act="gramstop">Hentikan</button><span class="small"><span class="spinner" style="width:14px;height:14px;display:inline-block;vertical-align:middle"></span> ${esc(G.prog)} · ${G.items.length} temuan</span>`:`<button class="btn primary" data-act="gramrun" ${S.sample?"":"disabled"}>${G.items?"Periksa ulang":"Mulai cek grammar"}</button>`}${S.sample?"":`<span class="small muted">Memerlukan koneksi ke Claude (buka di claude.ai).</span>`}</div>
+    <p class="small muted" style="margin:0 0 10px">${AIN()} memeriksa tata bahasa setiap paragraf sesuai bahasanya: kalimat tidak efektif, imbuhan, kata depan, dan konjungsi untuk bahasa Indonesia; agreement, tense, article, preposition, dan run-on untuk bahasa Inggris. Setiap temuan dicocokkan ke kalimat aslinya. Typo, tanda baca, dan istilah dari daftar periksa ada di halaman Ejaan & Diksi (${local.length} temuan).</p>
+    <div class="toolbar" style="margin:0">${G.busy?`<button class="btn sm" data-act="gramstop">Hentikan</button><span class="small"><span class="spinner" style="width:14px;height:14px;display:inline-block;vertical-align:middle"></span> ${esc(G.prog)} · ${G.items.length} temuan</span>`:`<button class="btn primary" data-act="gramrun" ${S.sample?"":"disabled"}>${G.items?"Periksa ulang":"Mulai cek grammar"}</button>`}${S.sample?"":`<span class="small muted">${esc(aiNA())}</span>`}</div>
     ${G.err?`<div class="notice err" style="margin-top:10px">${icon(IC.warn)}<div>${esc(G.err)}</div></div>`:""}</div>`;
   if (!G.items) return html;
   const n=l=>G.items.filter(f=>f.lang===l).length;
@@ -3380,7 +3588,7 @@ async function runAIClaude(){
 ${pick.map(x=>`[${x.p}] ${x.text.slice(0,1500)}`).join("\n\n")}`, {modelTier:"default", cache:false});
     X.claude = {keseluruhan:Math.max(0,Math.min(100,+r.keseluruhan||0)), ringkasan:String(r.ringkasan||"")};
     (r.paragraf||[]).forEach(x=>{ const row=X.rows.find(y=>y.p===+x.i); if (row) row.claude={skor:Math.max(0,Math.min(100,+x.skor||0)), alasan:String(x.alasan||"")}; });
-  }catch(e){ X.err="Penilaian Claude gagal: "+(e.message||e.code||"coba lagi."); }
+  }catch(e){ X.err=("Penilaian "+AIN()+" gagal: ")+(e.message||e.code||"coba lagi."); }
   X.busy=false; render();
 }
 const aiSev = s => s>=60?"error":s>=35?"warning":"ok";
@@ -3389,11 +3597,11 @@ function vAICheck(){
   const X=aiState(); if (!X.rows) runAICheck();
   const R=X.rows; const RI=R.filter(incl); const tw=RI.reduce((a,r)=>a+words(r.text).length,0)||1; const ov=RI.length?Math.round(RI.reduce((a,r)=>a+r.score*words(r.text).length,0)/tw):0; X.overall=ov; const hi=RI.filter(r=>r.score>=60).length, md=RI.filter(r=>r.score>=35&&r.score<60).length;
   return dlBar("aicheck") + `<div class="card" style="margin-bottom:16px"><h3>Cek penggunaan AI<span class="r">indikatif</span></h3>
-    <p class="small muted" style="margin:0 0 10px">Setiap paragraf dinilai dari ciri gaya yang sering muncul pada teks buatan AI: frasa klise (mis. "memainkan peran penting", "it is important to note", "delve"), panjang kalimat yang terlalu seragam, dan transisi berulang. Claude dapat memberi penilaian kedua. <b>Hasil ini bukan bukti</b>: detektor AI dapat keliru, termasuk menandai tulisan manusia yang rapi. Gunakan sebagai bahan diskusi dengan penulis.</p>
-    <div class="toolbar" style="margin:0"><button class="btn sm" data-act="aichk">Hitung ulang</button>${X.busy?`<span class="small"><span class="spinner" style="width:14px;height:14px;display:inline-block;vertical-align:middle"></span> Claude menilai…</span>`:`<button class="btn primary sm" data-act="aiclaude" ${S.sample?"":"disabled"}>${X.claude?"Nilai ulang dengan Claude":"Minta penilaian Claude"}</button>`}</div>
-    ${X.err?`<div class="notice err" style="margin-top:10px">${icon(IC.warn)}<div>${esc(X.err)}</div></div>`:""}${X.claude?`<p class="small" style="margin:10px 0 0"><b>Penilaian Claude: ${X.claude.keseluruhan}%</b> · ${esc(X.claude.ringkasan)}</p>`:""}</div>
+    <p class="small muted" style="margin:0 0 10px">Setiap paragraf dinilai dari ciri gaya yang sering muncul pada teks buatan AI: frasa klise (mis. "memainkan peran penting", "it is important to note", "delve"), panjang kalimat yang terlalu seragam, dan transisi berulang. ${AIN()} dapat memberi penilaian kedua. <b>Hasil ini bukan bukti</b>: detektor AI dapat keliru, termasuk menandai tulisan manusia yang rapi. Gunakan sebagai bahan diskusi dengan penulis.</p>
+    <div class="toolbar" style="margin:0"><button class="btn sm" data-act="aichk">Hitung ulang</button>${X.busy?`<span class="small"><span class="spinner" style="width:14px;height:14px;display:inline-block;vertical-align:middle"></span> ${AIN()} menilai…</span>`:`<button class="btn primary sm" data-act="aiclaude" ${S.sample?"":"disabled"}>${X.claude?("Nilai ulang dengan "+AIN()):("Minta penilaian "+AIN())}</button>`}</div>
+    ${X.err?`<div class="notice err" style="margin-top:10px">${icon(IC.warn)}<div>${esc(X.err)}</div></div>`:""}${X.claude?`<p class="small" style="margin:10px 0 0"><b>Penilaian ${AIN()}: ${X.claude.keseluruhan}%</b> · ${esc(X.claude.ringkasan)}</p>`:""}</div>
     <div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">${[["Skor indikasi AI",`${X.overall}%`,aiLab(X.overall),IC.info],["Paragraf indikasi tinggi",hi,`dari ${RI.length} paragraf tercentang`,IC.warn],["Paragraf indikasi sedang",md,"perlu dicermati",IC.doc]].map(([l,v,x,d])=>`<div class="kpi"><div class="ic">${icon(d)}</div><div><div class="lb">${l}</div><div class="v">${v}</div><div class="s">${x}</div></div></div>`).join("")}</div>
-    <div class="card" style="margin-top:16px">${inclBar("aichk")}<div class="flist">${[...R].sort((a,b)=>b.score-a.score).map(r=>`<article class="f sev-${aiSev(r.score)} ${incl(r)?"":"excl"}"><div class="f-head">${inclBox(r)}<h4>${aiLab(r.score)} · ${r.score}%${r.claude?` · Claude ${r.claude.skor}%`:""}</h4><span class="chip">${esc(r.bab)}</span></div><div class="q">${esc(r.text.slice(0,420))}${r.text.length>420?"…":""}</div><p class="small" style="margin:6px 0 0">${r.hits.length?`Frasa khas: ${r.hits.slice(0,8).map(h=>`“${esc(h)}”`).join(", ")}. `:""}Variasi panjang kalimat ${r.cv} (rendah = seragam), rata-rata ${r.mean} kata per kalimat.${r.claude?` <b>Claude:</b> ${esc(r.claude.alasan)}`:""}</p><div class="meta"><button class="linkish" data-goto="${r.p}">Lihat di naskah →</button></div></article>`).join("")||`<p class="empty">Tidak ada paragraf yang cukup panjang (≥ 50 kata).</p>`}</div></div>`;
+    <div class="card" style="margin-top:16px">${inclBar("aichk")}<div class="flist">${[...R].sort((a,b)=>b.score-a.score).map(r=>`<article class="f sev-${aiSev(r.score)} ${incl(r)?"":"excl"}"><div class="f-head">${inclBox(r)}<h4>${aiLab(r.score)} · ${r.score}%${r.claude?` · ${AIN()} ${r.claude.skor}%`:""}</h4><span class="chip">${esc(r.bab)}</span></div><div class="q">${esc(r.text.slice(0,420))}${r.text.length>420?"…":""}</div><p class="small" style="margin:6px 0 0">${r.hits.length?`Frasa khas: ${r.hits.slice(0,8).map(h=>`“${esc(h)}”`).join(", ")}. `:""}Variasi panjang kalimat ${r.cv} (rendah = seragam), rata-rata ${r.mean} kata per kalimat.${r.claude?` <b>${AIN()}:</b> ${esc(r.claude.alasan)}`:""}</p><div class="meta"><button class="linkish" data-goto="${r.p}">Lihat di naskah →</button></div></article>`).join("")||`<p class="empty">Tidak ada paragraf yang cukup panjang (≥ 50 kata).</p>`}</div></div>`;
 }
 
 /* ═════════════ REVISI INSTAN: naskah siap publish ═════════════ */
@@ -3440,7 +3648,7 @@ function articleOutline(){
   return out.join("\n").slice(0,6000);
 }
 async function runInstant(){
-  if (!S.sample){ toast("Revisi instan memakai Claude; buka halaman ini di claude.ai atau aplikasi Claude."); return; }
+  if (!S.sample){ toast(aiNA("Revisi instan memakai AI.")); return; }
   if (!S.local || (S.inst && S.inst.busy)) return;
   const M=S.local.M; const ctl=new AbortController();
   const units = (S.revSel && S.revSel.length ? S.revSel : unitsForRevision());
@@ -3476,7 +3684,7 @@ async function runInstant(){
           U.chunks[job.k]=items;
           if (r.ringkasan) U.ringkasan = (U.ringkasan?U.ringkasan+" ":"")+String(r.ringkasan);
           arr(r.perlu_cek).forEach(c=>{ const s=String(c||"").trim(); if (s) U.cek.push(s); });
-        }catch(e){ if (e&&e.code==="cancelled") throw e; U.err = e&&e.code==="rate_limited" ? "Batas pemakaian Claude tercapai." : e&&e.code==="invalid_json" ? "Jawaban tidak terbaca." : "Gagal direvisi."; }
+        }catch(e){ if (e&&e.code==="cancelled") throw e; U.err = e&&e.code==="rate_limited" ? ("Batas pemakaian "+AIN()+" tercapai.") : e&&e.code==="invalid_json" ? "Jawaban tidak terbaca." : "Gagal direvisi."; }
         if (!jobs.slice(idx).some(j=>j.U===U)){ U.items = U.chunks.flat().filter(Boolean); U.st = U.err&&!U.items.length ? "fail" : "done"; }
         render();
       }
@@ -3523,9 +3731,9 @@ function instStats(){
 function vInstant(){
   const I=S.inst; const conn=!!S.sample;
   const head = `<div class="card" style="margin-bottom:16px;border:1px solid var(--accent,#4f46e5)"><h3>Revisi instan<span class="r">naskah siap ${isArt()?"publish":"diujikan"}</span></h3>
-    <p class="small" style="margin:0 0 10px">Claude menulis ulang setiap ${isArt()?"bagian":"bab"} secara utuh berdasarkan <b>semua masukan</b> (pemeriksaan sistem, tinjauan/review reviewer, petunjuk editor, dan instruksi tambahan). Caranya: melengkapi penalaran yang kurang, menambah paragraf atau subjudul yang dibutuhkan, memecah atau menggabungkan paragraf, dan menyusun ulang urutannya supaya logis, sistematis, dan harmonis. Hasilnya bersih tanpa penanda [LENGKAPI].</p>
-    <p class="small muted" style="margin:0 0 12px">Claude tidak mengarang data, angka, hasil uji, atau sumber. Hal yang memang memerlukan data penulis dicatat di daftar <b>Perlu dicek</b> (di luar naskah). Angka baru yang tidak ada di naskah asli juga ditandai otomatis. Revisi Naskah biasa di atas tetap tersedia dengan penanda [LENGKAPI].</p>
-    <div class="toolbar" style="margin:0">${I&&I.busy?`<button class="btn sm" data-act="inststop">Hentikan</button><span class="small">Menulis ulang ${I.units.filter(u=>u.st==="done").length} dari ${I.units.length} ${isArt()?"bagian":"bab"}…</span>`:`<button class="btn primary bigbtn" data-act="instrun" ${conn?"":"disabled"}>${icon("M13 2 4 14h7l-1 8 9-12h-7l1-8Z")}${I&&I.done?"Jalankan ulang revisi instan":"Revisi instan"}</button>`}${conn?`<span class="small muted">${(S.revSel&&S.revSel.length?S.revSel:unitsForRevision()).length} ${isArt()?"bagian":"bab"} · ${S.useScite&&S.mcp?"dengan pencarian sumber terverifikasi":"tanpa sumber baru"}${S.ai?"":" · jalankan review/tinjauan dulu agar masukannya lengkap"}</span>`:`<span class="small muted">Memerlukan koneksi ke Claude (buka di claude.ai).</span>`}</div></div>`;
+    <p class="small" style="margin:0 0 10px">${AIN()} menulis ulang setiap ${isArt()?"bagian":"bab"} secara utuh berdasarkan <b>semua masukan</b> (pemeriksaan sistem, tinjauan/review reviewer, petunjuk editor, dan instruksi tambahan). Caranya: melengkapi penalaran yang kurang, menambah paragraf atau subjudul yang dibutuhkan, memecah atau menggabungkan paragraf, dan menyusun ulang urutannya supaya logis, sistematis, dan harmonis. Hasilnya bersih tanpa penanda [LENGKAPI].</p>
+    <p class="small muted" style="margin:0 0 12px">${AIN()} tidak mengarang data, angka, hasil uji, atau sumber. Hal yang memang memerlukan data penulis dicatat di daftar <b>Perlu dicek</b> (di luar naskah). Angka baru yang tidak ada di naskah asli juga ditandai otomatis. Revisi Naskah biasa di atas tetap tersedia dengan penanda [LENGKAPI].</p>
+    <div class="toolbar" style="margin:0">${I&&I.busy?`<button class="btn sm" data-act="inststop">Hentikan</button><span class="small">Menulis ulang ${I.units.filter(u=>u.st==="done").length} dari ${I.units.length} ${isArt()?"bagian":"bab"}…</span>`:`<button class="btn primary bigbtn" data-act="instrun" ${conn?"":"disabled"}>${icon("M13 2 4 14h7l-1 8 9-12h-7l1-8Z")}${I&&I.done?"Jalankan ulang revisi instan":"Revisi instan"}</button>`}${conn?`<span class="small muted">${(S.revSel&&S.revSel.length?S.revSel:unitsForRevision()).length} ${isArt()?"bagian":"bab"} · ${S.useScite&&S.mcp?"dengan pencarian sumber terverifikasi":"tanpa sumber baru"}${S.ai?"":" · jalankan review/tinjauan dulu agar masukannya lengkap"}</span>`:`<span class="small muted">${esc(aiNA())}</span>`}</div></div>`;
   if (!I) return head;
   const st=instStats();
   let html = head;
@@ -3690,8 +3898,8 @@ function similarityModel(){
 }
 function aicheckModel(){
   const X=aiState(); if (!X.rows) runAICheck(); const R=[...X.rows].filter(incl).sort((a,b)=>b.score-a.score); const hi=R.filter(r=>r.score>=35); const tw=R.reduce((a,r)=>a+words(r.text).length,0)||1; X.overall=R.length?Math.round(R.reduce((a,r)=>a+r.score*words(r.text).length,0)/tw):0;
-  return {count:R.length, title:"Laporan Cek Penggunaan AI (Indikatif)", sub:"Berdasarkan ciri gaya bahasa; bukan bukti penggunaan AI", info:baseInfo(), gauge:{v:X.overall, label:"Indikasi penggunaan AI", unit:"%", lowerBetter:true}, kpis:[["Paragraf diperiksa",R.length],["Indikasi tinggi",R.filter(r=>r.score>=60).length],["Indikasi sedang",R.filter(r=>r.score>=35&&r.score<60).length],["Penilaian Claude",X.claude?`${X.claude.keseluruhan}%`:"—"]],
-    summary:`Skor indikasi penggunaan AI ${X.overall}% (${bandOf(X.overall,true)}).${X.claude?` Penilaian Claude: ${X.claude.keseluruhan}%. ${X.claude.ringkasan}`:""} ${hi.length} paragraf sebaiknya ditulis ulang dengan gaya penulis sendiri. Hasil ini indikatif dan perlu dikonfirmasi dengan penulis.`,
+  return {count:R.length, title:"Laporan Cek Penggunaan AI (Indikatif)", sub:"Berdasarkan ciri gaya bahasa; bukan bukti penggunaan AI", info:baseInfo(), gauge:{v:X.overall, label:"Indikasi penggunaan AI", unit:"%", lowerBetter:true}, kpis:[["Paragraf diperiksa",R.length],["Indikasi tinggi",R.filter(r=>r.score>=60).length],["Indikasi sedang",R.filter(r=>r.score>=35&&r.score<60).length],[("Penilaian "+AIN()),X.claude?`${X.claude.keseluruhan}%`:"—"]],
+    summary:`Skor indikasi penggunaan AI ${X.overall}% (${bandOf(X.overall,true)}).${X.claude?` Penilaian ${AIN()}: ${X.claude.keseluruhan}%. ${X.claude.ringkasan}`:""} ${hi.length} paragraf sebaiknya ditulis ulang dengan gaya penulis sendiri. Hasil ini indikatif dan perlu dikonfirmasi dengan penulis.`,
     blocks:[{h:"Paragraf yang Perlu Direvisi"}, {table:{head:["No","Bagian","Cuplikan paragraf","Skor","Cara memperbaiki"], w:[5,12,41,10,32], empty:"Tidak ada paragraf dengan indikasi sedang atau tinggi.", rows:hi.map((r,k)=>[cell(k+1,{al:"center"}), r.bab||"-", r.text.slice(0,280)+(r.text.length>280?"…":""), cell(`${r.score}%`,{fill:SEV_FILL[aiSev(r.score)],al:"center"}), `${r.hits.length?`Ganti frasa klise (${r.hits.slice(0,4).join(", ")}). `:""}Tambahkan data dan konteks spesifik penelitian, variasikan panjang kalimat, dan tulis dengan gaya sendiri.`])}}], file:"Laporan_Cek_Penggunaan_AI"};
 }
 function bandingModel(){
@@ -3716,7 +3924,7 @@ function instantModel(){
 }
 function reviewModel(){
   const ai=S.ai; const rev=ai.mode==="review";
-  if (!rev){ const fs=ai.findings.filter(incl); return {count:fs.length, title:"Laporan Tinjauan Claude", sub:acuanLabel(), info:baseInfo(), gauge:{v:ai.skor, label:"Skor tinjauan"}, kpis:[["Wajib direvisi",fs.filter(f=>f.sev==="error").length],["Disarankan",fs.filter(f=>f.sev==="warning").length]], summary:ai.ringkasan, blocks:[{h:"Bagian yang Perlu Direvisi"}, {table:revisionTable(fs)}], file:"Laporan_Tinjauan"}; }
+  if (!rev){ const fs=ai.findings.filter(incl); return {count:fs.length, title:("Laporan Tinjauan "+AIN()), sub:acuanLabel(), info:baseInfo(), gauge:{v:ai.skor, label:"Skor tinjauan"}, kpis:[["Wajib direvisi",fs.filter(f=>f.sev==="error").length],["Disarankan",fs.filter(f=>f.sev==="warning").length]], summary:ai.ringkasan, blocks:[{h:"Bagian yang Perlu Direvisi"}, {table:revisionTable(fs)}], file:"Laporan_Tinjauan"}; }
   const coms=ai.reviewers.flatMap(r=>r.bagian.flatMap(b=>b.komentar)).filter(incl);
   const pets = ai.petunjuk.filter(incl);
   const rows = ai.petunjuk.length ? pets.map((p,k)=>[cell(k+1,{al:"center"}), p.bagian, p.langkah, p.contoh||"—", PRIO(p.prioritas==="wajib"?"error":"warning")]) : coms.filter(c=>c.sev!=="info").map((c,k)=>[cell(k+1,{al:"center"}), c.kat, c.title, c.fix||"—", PRIO(c.sev)]);
@@ -3857,7 +4065,7 @@ function vAIScope(){
   const all=unitsForRevision(); const sel=aiSel(); const allSel = sel.length===all.length;
   return `<div style="margin-top:12px"><div class="small muted" style="margin-bottom:6px">Cakupan tinjauan: <b>${allSel?"keseluruhan naskah":`${sel.length} dari ${all.length} bab`}</b> · <button class="linkish" data-aiunitall="1">semua</button> · <button class="linkish" data-aiunitall="0">kosongkan</button></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">${all.map(u=>`<label class="toggle" style="padding:6px 10px"><input type="checkbox" data-aiunit="${esc(u)}" ${sel.includes(u)?"checked":""}><span class="small">${esc(u)}</span></label>`).join("")}</div>
-    <label class="toggle" style="margin-top:8px;padding:7px 10px"><input type="checkbox" id="aiPerBab" ${S.aiPerBab?"checked":""} ${sel.length>1?"":"disabled"}><span class="small"><b>Tinjau tiap bab secara terpisah</b> (lebih detail; ${sel.length} permintaan ke Claude)</span></label></div>`;
+    <label class="toggle" style="margin-top:8px;padding:7px 10px"><input type="checkbox" id="aiPerBab" ${S.aiPerBab?"checked":""} ${sel.length>1?"":"disabled"}><span class="small"><b>Tinjau tiap bab secara terpisah</b> (lebih detail; ${sel.length} permintaan ke ${AIN()})</span></label></div>`;
 }
 
 /* ═════════════ INVOICE: DEPOSIT (AWAL) / INVOICE (AKHIR) + CAP PAID ═════════════ */
@@ -3947,7 +4155,7 @@ async function copyText(t, label){
 function ojsLang(judul){ const g = guessDocLang((S.doc&&S.doc.paras)||[]); if (g.en+g.id>=4) return g.en>g.id ? "en" : "id"; return detectLang(judul, "auto"); }
 function ojsTrKey(src, E, lang){ const ab = lang==="en" ? E.abstract_en : E.abstrak_id; const kw = (lang==="en" ? E.keywords_en : E.kata_kunci_id)||[]; const s=[src, lang, E.judul||"", ab||"", kw.join(",")].join("|"); let x=0; for (let i=0;i<s.length;i++) x=(x*31+s.charCodeAt(i))|0; return lang+":"+s.length+":"+x; }
 async function ojsTranslate(){
-  const O=ojsState(); if (!S.sample){ toast("Terjemahan memakai Claude; buka di claude.ai."); return; }
+  const O=ojsState(); if (!S.sample){ toast(aiNA("Terjemahan memakai AI.")); return; }
   const {E, lang, src, trKey} = ojsData(); const TR=O.tr; if (!E.judul) return toast("Judul artikel tidak ditemukan.");
   if (TR.busy) return;
   const toEn = lang!=="en"; const ab = String((toEn ? E.abstrak_id : E.abstract_en)||"").trim(); const kw = (toEn ? E.kata_kunci_id : E.keywords_en)||[];
@@ -3984,7 +4192,7 @@ function vOJS(){
       <button class="btn sm" data-act="ojsall">Salin semua</button><button class="btn sm" data-act="ojsdocx">Unduh lembar metadata (.docx)</button></div>
     <div class="toolbar" style="margin:10px 0 0"><span class="small muted">Artikel berbahasa <b>${lang==="en"?"Inggris":"Indonesia"}</b> · kolom ${L2}:</span><div class="seg" role="group"><button aria-pressed="${O.trMode!=="naskah"}" data-ojstrmode="auto">Terjemahan otomatis</button><button aria-pressed="${O.trMode==="naskah"}" data-ojstrmode="naskah">Dari naskah</button></div>
       ${O.trMode!=="naskah"?`<button class="btn sm" data-act="ojstrans" ${TR.busy||!S.sample?"disabled":""}>${TR.busy?"Menerjemahkan…":"Terjemahkan ulang"}</button>
-      <span class="small ${TR.err?"":"muted"}" style="${TR.err?"color:var(--bad,#c62828)":""}">${!S.sample?"Terjemahan otomatis memakai Claude; buka aplikasi di claude.ai.":TR.busy?`Menerjemahkan judul, abstrak, dan kata kunci ke ${L2}…`:TR.err?esc(TR.err):TR.data&&TR.key===trKey?`✓ Judul, abstrak, dan kata kunci ${L2} sudah diterjemahkan otomatis.`:""}</span>`:`<span class="small muted">Memakai judul, abstrak, dan kata kunci ${L2} yang tertulis di naskah.</span>`}
+      <span class="small ${TR.err?"":"muted"}" style="${TR.err?"color:var(--bad,#c62828)":""}">${!S.sample?aiNA("Terjemahan otomatis memakai AI."):TR.busy?`Menerjemahkan judul, abstrak, dan kata kunci ke ${L2}…`:TR.err?esc(TR.err):TR.data&&TR.key===trKey?`✓ Judul, abstrak, dan kata kunci ${L2} sudah diterjemahkan otomatis.`:""}</span>`:`<span class="small muted">Memakai judul, abstrak, dan kata kunci ${L2} yang tertulis di naskah.</span>`}
     </div></div>
     ${vOJSWizard()}<details style="margin-bottom:16px"><summary class="small" style="cursor:pointer;font-weight:600;margin-bottom:10px">Cara otomatis dengan bookmark (untuk komputer, lebih teknis)</summary>${vOJSFill()}</details><h3 style="margin:8px 0 12px;font-size:13px;letter-spacing:.06em;text-transform:uppercase">Semua isian (bisa diedit)</h3>${groups.map(g=>`<div class="card" style="margin-bottom:16px"><h3>${esc(g)}</h3>${F.filter(f=>f.grp===g).map(field).join("")}</div>`).join("")}`;
 }
@@ -4161,7 +4369,7 @@ function norStatus(id){
 const NOR_NEEDS = {
   submission:{ojs:"Submission Files · Pre-Review Discussions · keputusan Send to Review / Decline Submission", items:[
     [2,"Cek kesesuaian template NOR, grammar (ID/EN), similarity, dan penggunaan AI","template"],
-    [1,"Similarity membandingkan dengan sumber yang ditemukan Claude, bukan basis data Turnitin/iThenticate. Untuk keputusan resmi tetap pakai layanan similarity jurnal.","similarity"],
+    [1,("Similarity membandingkan dengan sumber yang ditemukan "+AIN()+", bukan basis data Turnitin/iThenticate. Untuk keputusan resmi tetap pakai layanan similarity jurnal."),"similarity"],
     [0,"Teks keputusan awal (Send to Review / Decline Submission) dan pesan Pre-Review Discussion untuk penulis"]]},
   review:{ojs:"Review Rounds · Reviewer · Review Files · Revisions · Record Editorial Decision", items:[
     [2,"Review 1–3 reviewer dengan instruksi custom, laporan .docx/.pdf, dan naskah berkomentar balon per reviewer (siap unggah sebagai lampiran review)","ai"],
@@ -4585,7 +4793,7 @@ function findingsView(cat, intro=""){
     <div class="flist">${shown.length?shown.map(findingCard).join(""):`<p class="empty">Tidak ada temuan pada saringan ini.</p>`}</div></div>`;
 }
 function claudeUnavailable(){ return S.sample===null && S.sampleChecked; }
-function cta(){ return claudeUnavailable() ? `<div class="notice">${icon(IC.info)}<div>Tinjauan Claude hanya tersedia saat halaman ini dibuka di claude.ai atau aplikasi Claude. Pemeriksaan otomatis tetap berjalan penuh.</div></div>` : ""; }
+function cta(){ return claudeUnavailable() ? `<div class="notice">${icon(IC.info)}<div>${esc(aiNA("Pemeriksaan otomatis tetap berjalan penuh."))}</div></div>` : ""; }
 
 /* ═════════════ VIEWS ═════════════ */
 function vStage(){
@@ -4597,7 +4805,7 @@ function vStage(){
       <dl class="kv"><dt>Berkas</dt><dd>${esc(d.name)}</dd><dt>Sumber</dt><dd>${{docx:"Word (.docx) — format per paragraf terbaca",pdf:"PDF — teks saja",txt:"Teks (.txt)",tempel:"Teks tempelan",contoh:"Naskah contoh"}[d.source]||d.source}</dd><dt>Isi</dt><dd>${d.paras.length} paragraf · ${Math.round(len/1000)||1} rb karakter${d.pages?` · ${d.pages} halaman`:""}</dd><dt>Diperiksa sebagai</dt><dd>${art?"Artikel jurnal · template Nusantara of Research":`${S.tahap==="Proposal"?"Proposal skripsi":"Skripsi"} · ${esc(S.jenis)}`}</dd></dl>
       <p class="small muted" style="margin:12px 0">Periksa pilihan <b>Dokumen</b> dan <b>Jenis penelitian</b> di kanan atas sebelum memulai.</p>
       <div style="margin:0 0 12px">${vLangPick(true)}</div>
-      <label class="toggle"><input type="checkbox" id="withAI" ${S.withAI&&!claudeUnavailable()?"checked":""} ${claudeUnavailable()?"disabled":""}><span><b>${art?"Sertakan review reviewer":"Sertakan tinjauan Claude"}</b><br><span class="muted small">${art?"Simulasi reviewer jurnal yang sangat ketat menilai 11 bagian artikel, lalu editor menyusun petunjuk revisi. Memakai kuota akun Claude Anda (2–4 menit).":"Typo, kalimat, substansi, dan konsistensi antarbab. Berjalan setelah pemeriksaan otomatis, memakai kuota akun Claude Anda (1–3 menit)."}</span></span></label>
+      <label class="toggle"><input type="checkbox" id="withAI" ${S.withAI&&!claudeUnavailable()?"checked":""} ${claudeUnavailable()?"disabled":""}><span><b>${art?"Sertakan review reviewer":("Sertakan tinjauan "+AIN())}</b><br><span class="muted small">${art?("Simulasi reviewer jurnal yang sangat ketat menilai 11 bagian artikel, lalu editor menyusun petunjuk revisi. Memakai "+AIQ()+" (2–4 menit)."):("Typo, kalimat, substansi, dan konsistensi antarbab. Berjalan setelah pemeriksaan otomatis, memakai "+AIQ()+" (1–3 menit).")}</span></span></label>
       ${art?`<p class="small muted" style="margin:10px 0 0">Jurnal acuan reviewer: <b>${esc(jurnalLabel())}</b> · atur di kartu Jurnal acuan reviewer di atas.</p>`:""}
       ${art?`<div class="toolbar" style="margin:10px 0 0"><span class="small muted">Jumlah reviewer:</span><div class="seg" role="group">${[1,2,3].map(v=>`<button aria-pressed="${S.nRev===v}" data-nrev="${v}">${v} reviewer</button>`).join("")}</div></div>`:""}
       ${cta()?`<div style="margin-top:10px">${cta()}</div>`:""}
@@ -4605,7 +4813,7 @@ function vStage(){
     </div>
     <div class="card"><h3>Tahapan pemeriksaan</h3>
       <ol class="steps">${STEPS.map((s,i)=>{ const st = S.runStep<0 ? "" : i<S.runStep ? "done" : i===S.runStep ? "now" : ""; return `<li class="${st==="done"?"done":""}">${st==="done"?`<span class="dot sev-ok">${icon(IC.check)}</span>`:st==="now"?`<div class="spinner"></div>`:`<span class="dot sev-info" style="opacity:.5">${icon("M12 12h.01")}</span>`}${s}</li>`; }).join("")}
-      <li>${S.withAI&&!claudeUnavailable()?`<span class="dot sev-info">${icon(IC.check)}</span>`:`<span class="dot sev-info" style="opacity:.3">${icon(IC.x)}</span>`}${art?`Review ${S.nRev} reviewer + editor`:"Tinjauan Claude"} ${S.withAI&&!claudeUnavailable()?"":"(tidak disertakan)"}</li></ol>
+      <li>${S.withAI&&!claudeUnavailable()?`<span class="dot sev-info">${icon(IC.check)}</span>`:`<span class="dot sev-info" style="opacity:.3">${icon(IC.x)}</span>`}${art?`Review ${S.nRev} reviewer + editor`:("Tinjauan "+AIN())} ${S.withAI&&!claudeUnavailable()?"":"(tidak disertakan)"}</li></ol>
     </div></section>`;
 }
 function vOverview(){
@@ -4651,19 +4859,19 @@ function vOverview(){
       <div class="tbl-wrap"><table><thead><tr><th>${art?"Bagian":"Bab"}</th>${art?"<th>Ada</th>":"<th>Komponen</th><th>Ditemukan</th>"}<th>Kata</th><th>Sitasi</th><th>Revisi</th><th>Perhatian</th><th style="width:18%">${art?"Status":"Progres"}</th></tr></thead><tbody>
       ${L.babs.map(b=>`<tr><td><button class="linkish" style="color:var(--fg)" data-bab="${esc(b.bab)}">${esc(b.bab)}</button> <span class="muted small" style="font-weight:500">${esc(b.title)}</span></td>${art?`<td>${b.present?"✓":"—"}</td>`:`<td>${b.tot}</td><td>${b.found}</td>`}<td>${b.words.toLocaleString("id-ID")}</td><td>${b.cites}</td><td style="color:${b.err?"var(--err)":"inherit"};font-weight:${b.err?800:400}">${b.err}</td><td>${b.warn}</td><td>${art?sevPill(!b.present?"error":b.err?"error":b.warn?"warning":"ok", !b.present?"Tidak ada":b.err?"Revisi":b.warn?"Perhatian":"Sesuai"):`<div class="track"><i style="width:${b.pct}%;background:${b.pct===100?"var(--ok)":b.pct>=60?"var(--warn)":"var(--err)"}"></i></div>`}</td></tr>`).join("")}
       </tbody></table></div>
-      <details class="how"><summary>Cara skor dihitung</summary><p>Skor dimulai dari 100 lalu dikurangi per kategori (dengan batas maksimum). Skor ini dihitung otomatis dari aturan ${art?"template":"pedoman"}; Tinjauan Claude memberi penilaian substansi terpisah.</p><div class="tbl-wrap"><table><thead><tr><th>Kategori</th><th>Revisi</th><th>Perhatian</th><th>Maks.</th><th>Dikurangi</th></tr></thead><tbody>${Object.keys(WEIGHTS).map(c=>`<tr><td>${catLabel(c)}</td><td>−${WEIGHTS[c].e}</td><td>−${WEIGHTS[c].w}</td><td>${WEIGHTS[c].cap}</td><td>−${Math.round(L.parts[c]*10)/10}</td></tr>`).join("")}</tbody></table></div></details>
+      <details class="how"><summary>Cara skor dihitung</summary><p>Skor dimulai dari 100 lalu dikurangi per kategori (dengan batas maksimum). Skor ini dihitung otomatis dari aturan ${art?"template":"pedoman"}; Tinjauan ${AIN()} memberi penilaian substansi terpisah.</p><div class="tbl-wrap"><table><thead><tr><th>Kategori</th><th>Revisi</th><th>Perhatian</th><th>Maks.</th><th>Dikurangi</th></tr></thead><tbody>${Object.keys(WEIGHTS).map(c=>`<tr><td>${catLabel(c)}</td><td>−${WEIGHTS[c].e}</td><td>−${WEIGHTS[c].w}</td><td>${WEIGHTS[c].cap}</td><td>−${Math.round(L.parts[c]*10)/10}</td></tr>`).join("")}</tbody></table></div></details>
     </div>
     <div class="c4" style="display:flex;flex-direction:column;gap:16px;min-width:0">
       <div class="card"><h3>Kesehatan daftar pustaka<span class="r">${ci.count} entri</span></h3>
         ${ci.count?meters.map(([l,v,goal,col])=>`<div class="meter"><div class="row"><span>${l}</span><b style="color:${goal==null?"var(--fg)":v>=goal?"var(--ok)":"var(--err)"}">${v}%</b></div><div class="track"><i style="width:${v}%;background:${col}"></i>${goal&&goal<100?`<span class="goal" style="left:${goal}%" title="Target ${goal}%"></span>`:""}</div></div>`).join(""):`<p class="empty">Daftar pustaka belum terbaca.</p>`}
       </div>
-      <div class="card"><h3>${art?"Review reviewer":"Tinjauan Claude"}</h3>
+      <div class="card"><h3>${art?"Review reviewer":("Tinjauan "+AIN())}</h3>
         ${ai&&ai.mode==="review"?`<div class="ai-hero">${ring(ai.skor,120,16,"Skor")}<div style="flex:1;min-width:150px">${sevPill(decSev(ai.keputusan),ai.keputusan)}<p class="small" style="margin:8px 0 0">${ai.n} reviewer · ${ai.petunjuk.length} langkah revisi</p><button class="linkish" data-view="ai" style="margin-top:8px">Buka hasil review →</button><br><button class="btn primary sm" data-view="revisi" style="margin-top:8px">Revisi naskah →</button></div></div>`
         : S.aiBusy&&art?`<div style="display:flex;gap:10px;align-items:center"><div class="spinner"></div><span class="small">${S.nRev} reviewer sedang menilai artikel…</span></div>`
         : art&&!ai?`<p class="small muted" style="margin:0 0 10px">Simulasi 1–3 reviewer yang sangat ketat menilai 11 bagian artikel, lalu editor menyusun petunjuk revisi.</p><button class="btn primary sm" data-act="ai">Mulai review</button>${cta()}`
         : ai?`<div class="ai-hero">${ring(ai.skor,120,16,"Substansi")}<div style="flex:1;min-width:150px"><p class="small" style="margin:0">${esc(ai.ringkasan).slice(0,260)}${ai.ringkasan.length>260?"…":""}</p><button class="linkish" data-view="ai" style="margin-top:8px">Buka tinjauan lengkap →</button><br><button class="btn primary sm" data-view="revisi" style="margin-top:8px">Revisi naskah →</button></div></div>`
-        : S.aiBusy?`<div style="display:flex;gap:10px;align-items:center"><div class="spinner"></div><span class="small">Claude sedang membaca naskah${S.aiStream?` · ${S.aiStream.length.toLocaleString("id-ID")} karakter ditulis`:"…"}</span></div>`
-        : `<p class="small muted" style="margin:0 0 10px">Claude memeriksa typo, kalimat tidak efektif, konsistensi antarbab, dan ketajaman substansi. Setiap kutipan temuan diverifikasi ke naskah.</p><button class="btn primary sm" data-act="ai">Mulai tinjauan</button>${cta()}`}
+        : S.aiBusy?`<div style="display:flex;gap:10px;align-items:center"><div class="spinner"></div><span class="small">${AIN()} sedang membaca naskah${S.aiStream?` · ${S.aiStream.length.toLocaleString("id-ID")} karakter ditulis`:"…"}</span></div>`
+        : `<p class="small muted" style="margin:0 0 10px">${AIN()} memeriksa typo, kalimat tidak efektif, konsistensi antarbab, dan ketajaman substansi. Setiap kutipan temuan diverifikasi ke naskah.</p><button class="btn primary sm" data-act="ai">Mulai tinjauan</button>${cta()}`}
       </div>
     </div>
   </section>`;
@@ -4680,11 +4888,11 @@ function vPerBab(){
     const note = aiBab.find(x=>fold(x.bab)===fold(b.bab));
     const totF = b.byCat.reduce((a,v)=>a+v,0);
     return `<section class="card babcard">
-      <div class="babhead"><h3>${esc(b.bab)} <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:600">${esc(b.title)}</span></h3>${sevPill(!b.present?"error":b.err?"error":b.warn?"warning":"ok", !b.present?"Tidak ditemukan":b.err?`${b.err} revisi`:b.warn?`${b.warn} perhatian`:"Sesuai")}${note?sevPill(note.nilai>=80?"ok":note.nilai>=60?"warning":"error",`Claude ${note.nilai}`):""}${b.p!=null?`<button class="linkish" data-goto="${b.p}" style="margin-left:auto">Buka di naskah →</button>`:""}</div>
+      <div class="babhead"><h3>${esc(b.bab)} <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:600">${esc(b.title)}</span></h3>${sevPill(!b.present?"error":b.err?"error":b.warn?"warning":"ok", !b.present?"Tidak ditemukan":b.err?`${b.err} revisi`:b.warn?`${b.warn} perhatian`:"Sesuai")}${note?sevPill(note.nilai>=80?"ok":note.nilai>=60?"warning":"error",`${AIN()} ${note.nilai}`):""}${b.p!=null?`<button class="linkish" data-goto="${b.p}" style="margin-left:auto">Buka di naskah →</button>`:""}</div>
       <div class="stats">${[["Kata",b.words.toLocaleString("id-ID")],["Paragraf",b.paras],[art?"Sub-bagian":"Sub-bab",b.subs.length],["Sitasi",b.cites],["Tabel",b.tables],["Gambar",b.imgs]].map(([l,v])=>`<div class="stat"><b>${v}</b><span>${l}</span></div>`).join("")}</div>
       ${totF?`<div><div class="stack" title="Sebaran temuan">${b.byCat.map((v,i)=>v?`<i style="width:${v/totF*100}%;background:${Object.values(CAT_COLOR)[i]}"></i>`:"").join("")}</div><div class="subs" style="margin-top:6px">${Object.keys(CAT).map((c,i)=>b.byCat[i]?`<span class="chip"><i style="width:8px;height:8px;border-radius:50%;background:${CAT_COLOR[c]};display:inline-block"></i>${catLabel(c)} ${b.byCat[i]}</span>`:"").join("")}</div></div>`:""}
       ${b.subs.length?`<div class="subs">${b.subs.map(s=>`<span class="chip">${esc(s)}</span>`).join("")}</div>`:""}
-      ${note?`<div class="ai-note"><b>Catatan Claude:</b> ${esc(note.catatan)}</div>`:""}
+      ${note?`<div class="ai-note"><b>Catatan ${AIN()}:</b> ${esc(note.catatan)}</div>`:""}
       <div class="flist">${fs.map(findingCard).join("")}${aiF.map(findingCard).join("")||""}${!fs.length&&!aiF.length?`<p class="empty">Tidak ada temuan pada ${art?"bagian":"bab"} ini.</p>`:""}</div>
     </section>`;
   }).join("");
@@ -4748,11 +4956,11 @@ function vAI(){
   const ai=S.ai;
   const modes = `<div class="seg" role="group" aria-label="Kedalaman tinjauan"><button aria-pressed="${S.aiMode==="teliti"}" data-mode="teliti">Teliti</button><button aria-pressed="${S.aiMode==="cepat"}" data-mode="cepat">Cepat</button></div>`;
   const len = S.doc.paras.reduce((a,p)=>a+p.text.length,0);
-  const head = `<div class="card"><h3>Tinjauan substansi oleh Claude<span class="r">${len>AI_LIMIT?`${Math.round(AI_LIMIT/1000)} rb dari ${Math.round(len/1000)} rb karakter dikirim`:`${Math.round(len/1000)||1} rb karakter`}</span></h3>
+  const head = `<div class="card"><h3>Tinjauan substansi oleh ${AIN()}<span class="r">${len>AI_LIMIT?`${Math.round(AI_LIMIT/1000)} rb dari ${Math.round(len/1000)} rb karakter dikirim`:`${Math.round(len/1000)||1} rb karakter`}</span></h3>
     <div class="toolbar" style="margin-bottom:0">${modes}
     ${S.aiBusy?`<button class="btn sm" data-act="stop">Hentikan</button>`:`<button class="btn primary sm" data-act="ai">${ai?"Tinjau ulang":"Mulai tinjauan"}</button>`}
-    <span class="small muted">${S.aiMode==="teliti"?"Model paling teliti; biasanya 1–3 menit.":"Lebih cepat, analisis lebih ringkas."} Memakai kuota akun Claude Anda.</span></div>${S.aiBusy?"":vAIScope()}
-    ${S.aiBusy?`<div style="display:flex;gap:10px;align-items:center;margin-top:14px"><div class="spinner"></div><span class="small">${S.aiStep?`Meninjau ${esc(S.aiStep)} · `:""}${S.aiStream?`Claude menulis laporan… ${S.aiStream.length.toLocaleString("id-ID")} karakter`:"Claude sedang membaca dan menimbang naskah…"}</span></div>${S.aiStream?`<div class="stream" style="margin-top:10px">${esc(S.aiStream.slice(-600))}</div>`:""}`:""}
+    <span class="small muted">${S.aiMode==="teliti"?"Model paling teliti; biasanya 1–3 menit.":"Lebih cepat, analisis lebih ringkas."} Memakai ${AIQ()}.</span></div>${S.aiBusy?"":vAIScope()}
+    ${S.aiBusy?`<div style="display:flex;gap:10px;align-items:center;margin-top:14px"><div class="spinner"></div><span class="small">${S.aiStep?`Meninjau ${esc(S.aiStep)} · `:""}${S.aiStream?`${AIN()} menulis laporan… ${S.aiStream.length.toLocaleString("id-ID")} karakter`:(AIN()+" sedang membaca dan menimbang naskah…")}</span></div>${S.aiStream?`<div class="stream" style="margin-top:10px">${esc(S.aiStream.slice(-600))}</div>`:""}`:""}
     ${S.aiErr?`<div class="notice err" style="margin-top:12px">${icon(IC.warn)}<div>${esc(S.aiErr)}</div></div>`:""}
     ${cta()?`<div style="margin-top:12px">${cta()}</div>`:""}
   </div>`;
@@ -4769,9 +4977,9 @@ function vAI(){
     ${ai.perBab.length?`<div class="card c12"><h3>Nilai per ${S.local.art?"bagian":"bab"}<button class="linkish" data-view="perbab" style="margin-left:auto;text-transform:none;letter-spacing:0">Lihat rincian →</button></h3><div class="cons">${ai.perBab.map(c=>`<div><b>${esc(c.bab)}</b>${sevPill(c.nilai>=80?"ok":c.nilai>=60?"warning":"error",String(c.nilai))}<span class="small" style="flex:1">${esc(c.catatan)}</span></div>`).join("")}</div></div>`:""}
     <div class="card c12"><h3>Konsistensi antarbagian</h3><div class="cons">${ai.konsistensi.map(c=>`<div><b>${esc(c.aspek)}</b>${sevPill(statCol[c.status]||"info", c.status)}<span class="small" style="flex:1">${esc(c.catatan)}</span></div>`).join("")||`<p class="empty">—</p>`}</div></div>
   </section>
-  <div class="card"><h3>Temuan Claude<span class="r">${ai.findings.filter(f=>f.verified).length} dari ${ai.findings.length} kutipan terverifikasi</span></h3>
+  <div class="card"><h3>Temuan ${AIN()}<span class="r">${ai.findings.filter(f=>f.verified).length} dari ${ai.findings.length} kutipan terverifikasi</span></h3>
     <div class="toolbar"><div class="seg" role="group" aria-label="Saring kategori"><button aria-pressed="${fl==="all"}" data-filter="ai:all">Semua ${ai.findings.length}</button>${kats.map(k=>`<button aria-pressed="${fl===k}" data-filter="ai:${esc(k)}">${esc(k)} ${ai.findings.filter(f=>f.kat===k).length}</button>`).join("")}</div></div>
-    ${inclBar("ai","Temuan Claude yang disertakan dalam laporan")}<div class="flist">${shown.map(findingCard).join("")||`<p class="empty">Tidak ada temuan.</p>`}</div></div>`;
+    ${inclBar("ai",("Temuan "+AIN()+" yang disertakan dalam laporan"))}<div class="flist">${shown.map(findingCard).join("")||`<p class="empty">Tidak ada temuan.</p>`}</div></div>`;
 }
 
 const SUGGEST_KTI = ["Apakah latar belakang saya sudah mengarah ke rumusan masalah?","Buatkan contoh perbaikan untuk paragraf pertama latar belakang.","Apakah judul, rumusan masalah, dan tujuan sudah selaras?","Pertanyaan apa yang mungkin diajukan penguji saat seminar?","Tuliskan ulang abstrak saya agar 150–250 kata dan terstruktur."];
@@ -4791,9 +4999,9 @@ function md(s){
 }
 function vChat(){
   const sug = isArt()?SUGGEST_ART:SUGGEST_KTI;
-  return `<div class="card chat"><h3>Tanya pembimbing<span class="r">Claude membaca naskah dan hasil pemeriksaan</span></h3>
+  return `<div class="card chat"><h3>Tanya pembimbing<span class="r">${AIN()} membaca naskah dan hasil pemeriksaan</span></h3>
     ${cta()}
-    <div class="msgs" id="msgs" aria-live="polite">${S.chat.length?S.chat.map(m=>`<div class="msg ${m.role==="user"?"u":"a"}">${m.role==="user"?esc(m.content):(m.content?md(m.content):`<span class="small muted">Claude sedang berpikir…</span>`)}</div>`).join(""):`<p class="empty">Ajukan pertanyaan tentang naskah Anda, misalnya:</p>`}</div>
+    <div class="msgs" id="msgs" aria-live="polite">${S.chat.length?S.chat.map(m=>`<div class="msg ${m.role==="user"?"u":"a"}">${m.role==="user"?esc(m.content):(m.content?md(m.content):`<span class="small muted">${AIN()} sedang berpikir…</span>`)}</div>`).join(""):`<p class="empty">Ajukan pertanyaan tentang naskah Anda, misalnya:</p>`}</div>
     <div class="suggest">${sug.map(s=>`<button data-ask="${esc(s)}">${esc(s)}</button>`).join("")}</div>
     <form class="composer" id="chatForm"><textarea id="chatIn" rows="2" placeholder="Tulis pertanyaan… (Enter untuk kirim, Shift+Enter untuk baris baru)" aria-label="Pertanyaan"></textarea>
     ${S.chatBusy?`<button type="button" class="btn" data-act="chatstop">Hentikan</button>`:`<button class="btn primary" type="submit">Kirim</button>`}</form>
@@ -4813,7 +5021,7 @@ function vUnggah(){
       ${S.fileBusy?`<div class="upstate busy" role="status"><div class="spinner"></div><div>Membaca <b>${esc(S.fileBusy)}</b>… Berkas besar dapat memerlukan beberapa detik.</div></div>`:""}
       ${S.uploadErr?`<div class="upstate err" role="alert">${icon(IC.warn)}<div>${esc(S.uploadErr)}</div></div>`:""}
       ${S.pickerBlocked?`<div class="upstate err" role="alert">${icon(IC.warn)}<div><b>Pemilih berkas tidak terbuka.</b> Aplikasi Claude di HP ini belum mengizinkan halaman memilih berkas. Pilih salah satu:<ol style="margin:6px 0 0;padding-left:18px"><li><a class="linkish" href="${ARTIFACT_URL}" target="_blank" rel="noopener">Buka halaman ini di browser (Chrome/Safari)</a>, masuk ke akun Claude, lalu unggah berkas.</li><li>Buka naskah di Google Docs atau Word di HP → <b>Pilih semua</b> → <b>Salin</b>, lalu tempel di kotak <b>Tempel dari Word/Google Docs</b>. Judul, cetak miring, tabel, dan gambar ikut terbaca.</li></ol></div></div>`:`<p class="small muted" style="margin:10px 0 0">Di aplikasi Claude untuk HP, bila pemilih berkas tidak muncul, <a class="linkish" href="${ARTIFACT_URL}" target="_blank" rel="noopener">buka di browser</a> atau gunakan tempel dari Word/Google Docs.</p>`}
-      <div class="notice" style="margin-top:12px">${icon(IC.info)}<div>Berkas dibaca di perangkat Anda. Teks naskah baru dikirim ke Claude jika Anda menyertakan tinjauan Claude atau bertanya di Tanya Pembimbing.</div></div>
+      <div class="notice" style="margin-top:12px">${icon(IC.info)}<div>Berkas dibaca di perangkat Anda. Teks naskah baru dikirim ke ${AIN()} jika Anda menyertakan tinjauan ${AIN()} atau bertanya di Tanya Pembimbing.</div></div>
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn" data-act="sample-kti">Muat contoh proposal</button><button class="btn" data-act="sample-art">Muat contoh artikel jurnal</button><button class="btn" data-view="admin">Buat LOA &amp; Invoice</button></div>
     </div>
     <div class="card c6 paste"><h3>Tempel dari Word/Google Docs</h3>
@@ -4829,7 +5037,8 @@ function renderNav(){
   const badge = c => { if(!L) return ""; if(c==="template"){ if(!art) return ""; const r=templateChecklist(); const e=r.filter(x=>x.sev==="error").length; return `<span class="cnt ${e?"e":""}">${e||"✓"}</span>`; } if(c==="ai") return S.ai?`<span class="cnt">${S.ai.skor}</span>`:S.aiBusy?`<span class="cnt">…</span>`:""; const e=L.by[c]?L.by[c].error:0; return CAT[c]? `<span class="cnt ${e?"e":""}">${e||"✓"}</span>`:""; };
   const label = (id,l) => art ? ({struktur:"Struktur Artikel",isi:"Isi per Bagian",perbab:"Per Bagian",abstrak:"Judul & Abstrak",ai:"Review Reviewer"}[id]||l) : l;
   $("#nav").innerHTML = NAV.map(n=> n[0]==="sep" ? `<div class="sep"></div>` : `<button data-view="${n[0]}" ${S.view===n[0]||(n[0]==="nor"&&isNorView(S.view))?'aria-current="page"':""} ${(!S.doc&&!["unggah","admin","banding","nor"].includes(n[0]))?"disabled":""}>${icon(n[2])}<span>${label(n[0],n[1])}</span>${badge(n[0])}</button>`).join("");
-  $("#railfoot").innerHTML = art ? `<strong>Template Nusantara of Research</strong>Judul, abstrak bilingual, Arial Narrow, enam bagian artikel, dan minimal 15 rujukan.` : `<strong>Pedoman KTI 2025</strong>Pemeriksaan otomatis berjalan di perangkat Anda. Tinjauan Claude memakai akun Claude Anda sendiri.`;
+  $("#railfoot").innerHTML = art ? `<strong>Template Nusantara of Research</strong>Judul, abstrak bilingual, Arial Narrow, enam bagian artikel, dan minimal 15 rujukan.` : `<strong>Pedoman KTI 2025</strong>Pemeriksaan otomatis berjalan di perangkat Anda. Fitur AI memakai konektor <b>${esc(AI_PROV[AIC.provider].label)}</b>.`;
+  { const st=aiStatus(); const lb=$("#connLbl"), dt=$("#connDot"); if (lb) lb.textContent=AIN(); if (dt){ dt.className="conndot"+(st.ok?" ok":""); } const bc=$("#btnConn"); if (bc) bc.title="Konektor AI: "+st.t+" (klik untuk mengganti Claude, Gemini, atau ChatGPT)"; }
 }
 function render(){
   try{ recalcLocal(); }catch(e){ console.warn(e); }
@@ -4843,9 +5052,9 @@ function render(){
   $("#docline").innerHTML = d ? `<span class="chip">${icon(IC.doc).replace("<svg","<svg style='width:13px;height:13px'")}${esc(d.name)}</span>${d.source==="contoh"?`<span class="chip ex">Naskah contoh</span>`:""}${isArt()?`<span class="chip modechip">Artikel · Nusantara of Research</span>`:""}<span class="chip">${d.paras.length} paragraf${d.pages?` · ${d.pages} halaman`:""}</span>${S.local?"":`<span class="chip ex">Belum dianalisis</span>`}` : `<span class="chip">Belum ada naskah</span>`;
   $("#btnRun").disabled = !S.doc || S.running;
   $("#btnAI").disabled = !S.local || S.aiBusy;
-  $("#btnAI").lastChild.textContent = isArt() ? "Review reviewer" : "Tinjau dengan Claude";
+  $("#btnAI").lastChild.textContent = isArt() ? "Review reviewer" : ("Tinjau dengan "+AIN());
   $("#btnRev").disabled = !S.local;
-  $("#btnRev").title = !S.local ? "Jalankan analisis terlebih dahulu" : !S.sample ? "Revisi hanya tersedia saat terhubung dengan Claude" : "Revisi naskah berdasarkan semua temuan";
+  $("#btnRev").title = !S.local ? "Jalankan analisis terlebih dahulu" : !S.sample ? ("Revisi hanya tersedia saat terhubung dengan "+AIN()) : "Revisi naskah berdasarkan semua temuan";
   $("#btnRev").classList.toggle("primary", !!(S.local && S.ai && !S.rev));
   $("#btnExport").disabled = !S.local;
   $("#btnAdm").classList.toggle("primary", S.view==="admin");
@@ -5003,7 +5212,7 @@ function verifyQuote(q){
 async function runAI(){
   if (isArt()) return runReview();
   if (S.aiBusy || !S.local) return;
-  if (!S.sample){ S.aiErr = S.sampleChecked ? "Tinjauan Claude tidak tersedia di tampilan ini. Buka halaman ini di claude.ai atau aplikasi Claude." : "Menghubungkan ke Claude… coba lagi sebentar."; go("ai"); return; }
+  if (!S.sample){ S.aiErr = S.sampleChecked ? aiNA("Tinjauan belum dapat dijalankan.") : ("Menghubungkan ke "+AIN()+"… coba lagi sebentar."); go("ai"); return; }
   const art = isArt();
   const allUnits = unitsForRevision(); const sel = aiSel(); if (!sel.length){ S.aiErr="Pilih minimal satu bab untuk ditinjau."; return render(); }
   const groups = S.aiPerBab && sel.length>1 ? sel.map(u=>[u]) : [sel];
@@ -5055,21 +5264,21 @@ ${G.length<allUnits.length?docForAIUnits(G):docForAI()}
       return {id:"CL"+i, scope:sc, p2:v2.p, quoteEnd:String(t.kutipan_akhir||""), ai:true, cat:"ai", kat:String(t.kategori||"lainnya").toLowerCase(), sev, title:String(t.judul||"Temuan"), detail:String(t.penjelasan||""), fix:String(t.saran||""), quote:v.q||String(t.kutipan||""), p:v.p, verified:v.ok, babAI:String(t.bab||""), occ:v.p!=null&&v.q?[{p:v.p,q:v.q}]:[]};
     });
     S.ai = {skor:Math.max(0,Math.min(100,Math.round(+r.skor||0))), ringkasan:String(r.ringkasan||""), kekuatan:arr(r.kekuatan).map(String), prioritas:arr(r.prioritas).map(String), perBab:arr(r.per_bab).map(x=>({bab:String(x.bab||""),nilai:Math.max(0,Math.min(100,Math.round(+x.nilai||0))),catatan:String(x.catatan||"")})), konsistensi:arr(r.konsistensi).map(c=>({aspek:String(c.aspek||""),status:String(c.status||"").toLowerCase(),catatan:String(c.catatan||"")})), findings};
-    toast("Tinjauan Claude selesai.");
+    toast(("Tinjauan "+AIN()+" selesai."));
   }catch(e){
     const code = e && e.code;
-    S.aiErr = code==="cancelled" ? "" : code==="not_granted" ? "Izin memakai Claude tidak diberikan. Pemeriksaan otomatis tetap dapat dipakai." : code==="rate_limited" ? "Batas pemakaian Claude tercapai. Coba lagi beberapa saat lagi." : code==="invalid_json" ? "Jawaban Claude tidak dapat dibaca sebagai laporan. Tekan Tinjau ulang." : code==="prompt_too_large" ? "Naskah terlalu panjang untuk sekali tinjau. Pilih mode Cepat atau unggah per bab." : code==="sampling_disabled" ? "Claude tidak tersedia untuk akun ini." : "Tinjauan terputus. Tekan Tinjau ulang untuk mencoba lagi.";
+    S.aiErr = code==="cancelled" ? "" : code==="not_granted" ? ("Izin memakai "+AIN()+" tidak diberikan. Pemeriksaan otomatis tetap dapat dipakai.") : code==="rate_limited" ? ("Batas pemakaian "+AIN()+" tercapai. Coba lagi beberapa saat lagi.") : code==="invalid_json" ? ("Jawaban "+AIN()+" tidak dapat dibaca sebagai laporan. Tekan Tinjau ulang.") : code==="prompt_too_large" ? "Naskah terlalu panjang untuk sekali tinjau. Pilih mode Cepat atau unggah per bab." : code==="sampling_disabled" ? (AIN()+" tidak tersedia untuk akun ini.") : "Tinjauan terputus. Tekan Tinjau ulang untuk mencoba lagi.";
   }finally{ S.aiBusy=false; S.aiCtl=null; S.aiStream=""; render(); }
 }
 async function sendChat(q){
   q=(q||"").trim(); if(!q || S.chatBusy) return;
-  if (!S.sample){ toast(S.sampleChecked?"Tanya Pembimbing hanya tersedia di claude.ai atau aplikasi Claude.":"Menghubungkan ke Claude…"); return; }
+  if (!S.sample){ toast(S.sampleChecked?aiNA("Tanya Pembimbing memerlukan konektor AI."):("Menghubungkan ke "+AIN()+"…")); return; }
   const art=isArt();
   const rules = `Anda ${art?"reviewer jurnal":"dosen pembimbing KTI"} yang sabar dan teliti. Jawab dalam bahasa Indonesia yang jelas, rujuk ${art?"bagian":"bab"} naskah secara spesifik, dan beri contoh perbaikan bila diminta. Jangan mengarang isi naskah.
 ${art?RULES_ART:`Profil: ${S.jenis} tahap ${S.tahap}.\n${RULES_KTI}`}
 ${langRule()}
 ${S.local?`Hasil pemeriksaan otomatis: ${localSummary()}\nTemuan utama: ${S.local.all.filter(f=>f.sev==="error").slice(0,15).map(f=>f.title).join("; ")}`:""}
-${S.ai?"Ringkasan tinjauan Claude sebelumnya: "+S.ai.ringkasan:""}
+${S.ai?("Ringkasan tinjauan "+AIN()+" sebelumnya: ")+S.ai.ringkasan:""}
 NASKAH:
 """
 ${docForAI(60000)}
@@ -5083,7 +5292,7 @@ ${docForAI(60000)}
   }catch(e){
     const last=S.chat[S.chat.length-1];
     if (e && e.code==="cancelled"){ if(!last.content) S.chat.splice(-2,2); }
-    else last.content = (e && e.text ? e.text+"\n\n" : "") + (e && e.code==="not_granted"?"_Izin memakai Claude tidak diberikan._":e && e.code==="rate_limited"?"_Batas pemakaian tercapai. Coba lagi nanti._":"_Jawaban terputus. Kirim ulang pertanyaan Anda._");
+    else last.content = (e && e.text ? e.text+"\n\n" : "") + (e && e.code==="not_granted"?("_Izin memakai "+AIN()+" tidak diberikan._"):e && e.code==="rate_limited"?"_Batas pemakaian tercapai. Coba lagi nanti._":"_Jawaban terputus. Kirim ulang pertanyaan Anda._");
   }finally{ S.chatBusy=false; S.chatCtl=null; render(); const ci=$("#chatIn"); if(ci) ci.focus(); }
 }
 
@@ -5091,14 +5300,14 @@ ${docForAI(60000)}
 function reportHTML(){
   const L=S.local, d=S.doc, art=L.art; const row=f=>`<tr><td>${SEV_LABEL[f.sev]}</td><td>${esc(f.title)}${f.detail?`<br><small>${esc(f.detail)}</small>`:""}${f.fix?`<br><small><b>Perbaikan:</b> ${esc(f.fix)}</small>`:""}</td><td>${f.p!=null?esc(loc(L.M.paras[f.p])):esc(f.babAI||"")}</td></tr>`;
   const sec = (name, list) => `<h2>${name}</h2><table><tr><th>Status</th><th>Temuan</th><th>Lokasi</th></tr>${list.map(row).join("")||"<tr><td colspan=3>Tidak ada temuan.</td></tr>"}</table>`;
-  const babTable = `<h2>Ringkasan per ${art?"bagian":"bab"}</h2><table><tr><th>${art?"Bagian":"Bab"}</th><th>Kata</th><th>Sitasi</th><th>Revisi</th><th>Perhatian</th>${S.ai&&S.ai.mode!=="review"&&S.ai.perBab.length?"<th>Nilai Claude</th>":""}</tr>${L.babs.map(b=>{ const n=S.ai?S.ai.perBab.find(x=>fold(x.bab)===fold(b.bab)):null; return `<tr><td>${esc(b.bab)}</td><td>${b.words}</td><td>${b.cites}</td><td>${b.err}</td><td>${b.warn}</td>${S.ai&&S.ai.mode!=="review"&&S.ai.perBab.length?`<td>${n?n.nilai+" — "+esc(n.catatan):"—"}</td>`:""}</tr>`; }).join("")}</table>`;
+  const babTable = `<h2>Ringkasan per ${art?"bagian":"bab"}</h2><table><tr><th>${art?"Bagian":"Bab"}</th><th>Kata</th><th>Sitasi</th><th>Revisi</th><th>Perhatian</th>${S.ai&&S.ai.mode!=="review"&&S.ai.perBab.length?("<th>Nilai "+AIN()+"</th>"):""}</tr>${L.babs.map(b=>{ const n=S.ai?S.ai.perBab.find(x=>fold(x.bab)===fold(b.bab)):null; return `<tr><td>${esc(b.bab)}</td><td>${b.words}</td><td>${b.cites}</td><td>${b.err}</td><td>${b.warn}</td>${S.ai&&S.ai.mode!=="review"&&S.ai.perBab.length?`<td>${n?n.nilai+" — "+esc(n.catatan):"—"}</td>`:""}</tr>`; }).join("")}</table>`;
   return `<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Laporan ${art?"Artikel":"KTI"} — ${esc(d.name)}</title><style>body{font-family:"Times New Roman",serif;max-width:820px;margin:32px auto;padding:0 24px;color:#111;line-height:1.5}h1{font-size:20px;text-align:center}h2{font-size:15px;border-bottom:2px solid #1f3b8f;padding-bottom:3px;margin-top:26px;color:#1f3b8f}table{width:100%;border-collapse:collapse;font-size:12.5px}td,th{border:1px solid #cfd6e6;padding:6px 8px;text-align:left;vertical-align:top}th{background:#0d1838;color:#fff}small{color:#444}.score{font-size:28px;font-weight:bold}</style></head><body>
 <p style="text-align:center;font-weight:700;color:#1F3864;margin:0">${esc(NOR_BAND)}</p><h1>LAPORAN PEMERIKSAAN ${art?"ARTIKEL JURNAL":"KEPATUHAN KTI"}</h1><p style="text-align:center">${art?"Template Artikel Jurnal Nusantara of Research":"Pedoman KTI 2025"} · ${new Date().toLocaleDateString("id-ID",{day:"numeric",month:"long",year:"numeric"})}</p>
-<p><b>Berkas:</b> ${esc(d.name)}${d.source==="contoh"?" (naskah contoh)":""}<br><b>Dokumen:</b> ${art?"Artikel jurnal":esc(S.tahap)} · ${esc(S.jenis)}<br><b>Skor otomatis:</b> <span class="score">${L.score}</span>/100 · <b>Struktur:</b> ${L.st.found}/${L.st.total}${S.ai&&S.ai.mode!=="review"?`<br><b>Skor substansi (Claude):</b> ${S.ai.skor}/100`:""}${S.ai&&S.ai.mode==="review"?`<br><i>Hasil review reviewer tersedia sebagai unduhan terpisah.</i>`:""}</p>
+<p><b>Berkas:</b> ${esc(d.name)}${d.source==="contoh"?" (naskah contoh)":""}<br><b>Dokumen:</b> ${art?"Artikel jurnal":esc(S.tahap)} · ${esc(S.jenis)}<br><b>Skor otomatis:</b> <span class="score">${L.score}</span>/100 · <b>Struktur:</b> ${L.st.found}/${L.st.total}${S.ai&&S.ai.mode!=="review"?`<br><b>Skor substansi (${AIN()}):</b> ${S.ai.skor}/100`:""}${S.ai&&S.ai.mode==="review"?`<br><i>Hasil review reviewer tersedia sebagai unduhan terpisah.</i>`:""}</p>
 ${babTable}
-${S.ai&&S.ai.mode!=="review"?`<h2>Tinjauan Claude</h2><p>${esc(S.ai.ringkasan)}</p><p><b>Prioritas:</b></p><ol>${S.ai.prioritas.map(x=>`<li>${esc(x)}</li>`).join("")}</ol><table><tr><th>Aspek</th><th>Status</th><th>Catatan</th></tr>${S.ai.konsistensi.map(c=>`<tr><td>${esc(c.aspek)}</td><td>${esc(c.status)}</td><td>${esc(c.catatan)}</td></tr>`).join("")}</table>`:""}
+${S.ai&&S.ai.mode!=="review"?`<h2>Tinjauan ${AIN()}</h2><p>${esc(S.ai.ringkasan)}</p><p><b>Prioritas:</b></p><ol>${S.ai.prioritas.map(x=>`<li>${esc(x)}</li>`).join("")}</ol><table><tr><th>Aspek</th><th>Status</th><th>Catatan</th></tr>${S.ai.konsistensi.map(c=>`<tr><td>${esc(c.aspek)}</td><td>${esc(c.status)}</td><td>${esc(c.catatan)}</td></tr>`).join("")}</table>`:""}
 ${Object.keys(CAT).map(c=>sec(catLabel(c), L.all.filter(f=>f.cat===c && f.sev!=="ok" && incl(f)))).join("")}
-${S.ai&&S.ai.mode!=="review"?sec("Temuan Claude", S.ai.findings.filter(incl).map(f=>({...f, title:`[${f.kat}] ${f.title}`+(f.quote?` — "${f.quote}"`:"")}))):""}
+${S.ai&&S.ai.mode!=="review"?sec(("Temuan "+AIN()), S.ai.findings.filter(incl).map(f=>({...f, title:`[${f.kat}] ${f.title}`+(f.quote?` — "${f.quote}"`:"")}))):""}
 <p style="margin-top:30px;font-size:11px;color:#555">Laporan ini adalah alat bantu; keputusan akhir tetap pada dosen pembimbing dan editor.</p></body></html>`;
 }
 async function exportReport(){
@@ -5220,6 +5429,7 @@ $("#btnRun").addEventListener("click", startAnalysis);
 $("#btnAI").addEventListener("click", ()=>go("ai"));
 $("#btnRev").addEventListener("click", ()=>go("revisi"));
 $("#btnExport").addEventListener("click", e=>{ e.stopPropagation(); toggleExportMenu(); });
+document.addEventListener("click", e=>{ if (e.target.closest && e.target.closest("#btnConn")) aiDialog(false); });
 document.addEventListener("click", e=>{ if (S.menuOpen && !e.target.closest(".dlmenu") && !e.target.closest("#btnExport")) closeMenu(); }, true);
 $("#selJenis").innerHTML = Object.keys(GUIDE).map(k=>`<option>${k}</option>`).join("");
 const profileChanged = () => { if (S.local){ invalidate(); toast("Pilihan diubah. Tekan Mulai analisis untuk memeriksa ulang."); } render(); };
@@ -5236,9 +5446,10 @@ document.addEventListener("click", e=>{ const a=e.target.closest && e.target.clo
   await analyzeLocal(false);
   try{ const v=localStorage.getItem("kti.view"); if(v && viewMeta(v) && !["chat","unggah"].includes(v)) S.view=v; }catch(e){}
   render();
+  aiApply(); render();
   const c = window.claude;
-  if (!c || !c.use){ S.sampleChecked=true; render(); return; }
-  try{ const [smp, dl, mcp] = await Promise.all([c.use("sample"), c.use("downloads"), c.use("mcp")]); S.sample=smp; S.downloads=dl; S.mcp=mcp; }catch(e){}
-  S.sampleChecked=true; render();
+  if (c && c.use){ try{ const [smp, dl, mcp] = await Promise.all([c.use("sample"), c.use("downloads"), c.use("mcp")]); AIRT.sample=smp; AIRT.mcp=mcp; S.downloads=dl; }catch(e){} }
+  AIRT.checked=true; aiApply(); render();
+  if (!AIC.saved){ if (AIRT.sample){ aiSave(); } else aiDialog(true); }
 })();
 </script>
