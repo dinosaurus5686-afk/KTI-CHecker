@@ -4500,6 +4500,85 @@ async function admDownloadPdf(kind, paket){
   }catch(e){ console.error(e); toast("PDF gagal dibuat: "+(e.message||e)); }
 }
 
+/* ═════════════ SIMPAN HASIL KERJA PER NASKAH (IndexedDB di perangkat) ═════════════ */
+const WORK_KEYS = ["doc","jenis","tahap","local","local_nR","ai","aiErr","chat","filter","babSel","excl","rev","revSel","revDone","revProg","nRev","revNote","revNoteR","revNoDup","revTone","revSecSel","revView","aiUnits","aiPerBab","inst","ce","gram","sim","aicheck","adm","ojs","ojsWiz","cmp","finalMode","withAppendix","cmtOpt","norStage"];
+const WORK_DROP = new Set(["ctl","signal","url","onText"]);
+const WORK_MAX = 25;
+// salinan aman untuk disimpan: tanpa fungsi, pengendali proses, dan alamat gambar sementara
+function workClean(v, memo=new Map()){
+  if (v==null || typeof v!=="object") return typeof v==="function" ? undefined : v;
+  if (memo.has(v)) return memo.get(v);
+  if (v instanceof ArrayBuffer || ArrayBuffer.isView(v) || v instanceof Blob || v instanceof Date || v instanceof RegExp) return v;
+  if ((typeof AbortController!=="undefined" && v instanceof AbortController) || (typeof AbortSignal!=="undefined" && v instanceof AbortSignal) || (typeof Node!=="undefined" && v instanceof Node) || v===window) return undefined;
+  if (v instanceof Set){ const s=new Set(); memo.set(v,s); v.forEach(x=>{ const c=workClean(x,memo); if (c!==undefined) s.add(c); }); return s; }
+  if (v instanceof Map){ const m=new Map(); memo.set(v,m); v.forEach((x,k)=>{ const c=workClean(x,memo); if (c!==undefined) m.set(k,c); }); return m; }
+  if (Array.isArray(v)){ const a=[]; memo.set(v,a); v.forEach((x,i)=>{ const c=workClean(x,memo); a[i] = c===undefined ? null : c; }); return a; }
+  const o={}; memo.set(v,o);
+  for (const k of Object.keys(v)){ if (WORK_DROP.has(k)) continue; if (k==="busy"){ o[k]=typeof v[k]==="string"?"":false; continue; } const c=workClean(v[k],memo); if (c!==undefined) o[k]=c; }
+  return o;
+}
+// kunci naskah dari isinya (nama berkas boleh berbeda)
+function docKey(d){ if (!d || !d.paras) return ""; const t=d.paras.map(p=>p.text||"").join("\n"); let h=0, g=7; for (let i=0;i<t.length;i++){ const c=t.charCodeAt(i); h=(h*31+c)|0; g=(g*131+c)|0; } return `n${d.paras.length}_${(h>>>0).toString(36)}${(g>>>0).toString(36)}`; }
+let _idb=null;
+function idb(){
+  if (_idb) return _idb;
+  _idb = new Promise((res,rej)=>{ try{ const r=indexedDB.open("kti-checker-kerja",1); r.onupgradeneeded=()=>{ const db=r.result; if (!db.objectStoreNames.contains("meta")) db.createObjectStore("meta",{keyPath:"key"}); if (!db.objectStoreNames.contains("data")) db.createObjectStore("data",{keyPath:"key"}); }; r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); r.onblocked=()=>rej(new Error("blocked")); }catch(e){ rej(e); } });
+  _idb.catch(()=>{ _idb=null; }); return _idb;
+}
+const reqP = r => new Promise((res,rej)=>{ r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
+async function idbTx(stores, mode, fn){ const db=await idb(); return new Promise((res,rej)=>{ let out; const tx=db.transaction(stores,mode); tx.oncomplete=()=>res(out); tx.onerror=()=>rej(tx.error); tx.onabort=()=>rej(tx.error||new Error("abort")); Promise.resolve(fn(tx)).then(v=>{ out=v; }, e=>{ try{ tx.abort(); }catch(_){} rej(e); }); }); }
+function workProgress(){
+  const A=S.adm||{}; const p=[];
+  if (S.local) p.push("Analisis"); if (S.ai) p.push("Review"); if ((S.rev&&S.rev.done)||(S.inst&&S.inst.done)) p.push("Revisi");
+  if (S.cmp&&S.cmp.res) p.push("Banding"); if (S.ce&&S.ce.E) p.push("Copyedit"); if (A.vol&&A.no&&A.reg) p.push("LOA"); if (A.paid) p.push("Lunas");
+  return p;
+}
+async function workList(){ try{ const all = await idbTx(["meta"],"readonly",tx=>reqP(tx.objectStore("meta").getAll())); S.works = (all||[]).sort((a,b)=>b.savedAt-a.savedAt); }catch(e){ S.works = S.works||[]; } return S.works; }
+const workBusy = () => S.running||S.aiBusy||S.fileBusy||S.chatBusy||(S.rev&&S.rev.busy)||(S.inst&&S.inst.busy)||(S.ce&&S.ce.busy)||(S.gram&&S.gram.busy)||(S.sim&&S.sim.busy)||(S.cmp&&S.cmp.busy)||(S.ojs&&S.ojs.tr&&S.ojs.tr.busy);
+let _workT=null;
+function scheduleSave(){ if (!S.doc || S.doc.source==="contoh" || S._restoring || typeof indexedDB==="undefined") return; clearTimeout(_workT); _workT=setTimeout(saveWork, 1500); }
+async function saveWork(){
+  if (workBusy()){ _workT=setTimeout(saveWork, 3000); return; }
+  const d=S.doc; if (!d || d.source==="contoh") return; const key = d._key || (d._key = docKey(d));
+  const st={}; WORK_KEYS.forEach(k=>{ if (S[k]!==undefined) st[k]=S[k]; });
+  let state; try{ state = workClean(st); }catch(e){ console.warn("simpan:", e); return; }
+  const meta = {key, name:d.name||"naskah", savedAt:Date.now(), view:S.view, prog:workProgress(), judul:(()=>{ try{ return admState().judul||""; }catch(e){ return ""; } })()};
+  try{
+    await idbTx(["meta","data"],"readwrite", async tx=>{ tx.objectStore("data").put({key, state}); tx.objectStore("meta").put(meta); });
+    S.savedAt = meta.savedAt; const w = await workList();
+    if (w.length > WORK_MAX){ const old=w.slice(WORK_MAX); await idbTx(["meta","data"],"readwrite", tx=>{ old.forEach(m=>{ tx.objectStore("meta").delete(m.key); tx.objectStore("data").delete(m.key); }); }); await workList(); }
+    const el=document.getElementById("savedChip"); if (el) el.textContent = savedLabel();
+  }catch(e){ console.warn("simpan gagal:", e); S.saveErr = String(e&&e.name==="QuotaExceededError" ? "Penyimpanan perangkat penuh. Hapus beberapa naskah tersimpan." : ""); }
+}
+const savedLabel = () => S.savedAt ? `✓ Tersimpan ${new Date(S.savedAt).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})}` : "";
+async function workLoad(key){ try{ return await idbTx(["data"],"readonly",tx=>reqP(tx.objectStore("data").get(key))); }catch(e){ return null; } }
+function applyWork(rec, meta){
+  S._restoring=true;
+  try{
+    const st=rec.state||{}; setDoc(st.doc);
+    WORK_KEYS.forEach(k=>{ if (k!=="doc" && st[k]!==undefined) S[k]=st[k]; });
+    S.doc._key = rec.key; if (!(S.excl instanceof Set)) S.excl = new Set(S.excl||[]);
+    try{ $("#selJenis").value=S.jenis; $("#selTahap").value=S.tahap; }catch(_){}
+    S.savedAt = meta ? meta.savedAt : Date.now();
+  } finally { S._restoring=false; }
+}
+async function workFind(doc){ const key=docKey(doc); doc._key=key; const rec = await workLoad(key); if (!rec) return null; const meta = (S.works||[]).find(m=>m.key===key) || null; return {rec, meta}; }
+async function workOpen(key){
+  const rec = await workLoad(key); if (!rec) return toast("Data naskah ini tidak ditemukan.");
+  const meta=(S.works||[]).find(m=>m.key===key); applyWork(rec, meta);
+  toast(`Naskah dipulihkan: ${S.doc.name}.`); go(meta && meta.view && viewMeta(meta.view) && meta.view!=="unggah" ? meta.view : "overview");
+}
+async function workDelete(key){ try{ await idbTx(["meta","data"],"readwrite", tx=>{ const ks = key ? [key] : (S.works||[]).map(m=>m.key); ks.forEach(k=>{ tx.objectStore("meta").delete(k); tx.objectStore("data").delete(k); }); }); }catch(e){} if (!key || (S.doc && S.doc._key===key)) S.savedAt=0; await workList(); render(); }
+function vWorks(){
+  const w=S.works||[]; if (!w.length) return "";
+  const when = t => { const d=new Date(t); return `${d.getDate()} ${BULAN[d.getMonth()].slice(0,3)} ${d.getFullYear()}, ${d.toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})}`; };
+  return `<div class="card" style="margin-bottom:16px"><h3>Naskah tersimpan di perangkat ini<span class="r">${w.length} naskah · tersimpan otomatis</span></h3>
+    <p class="small muted" style="margin:0 0 8px">Semua hasil kerja (analisis, review, revisi, copyedit, LOA & invoice, isian OJS) disimpan otomatis. Buka lagi tanpa menunggu Claude. Mengunggah berkas yang sama juga langsung memulihkan hasilnya. Data hanya ada di browser perangkat ini.</p>
+    <ul class="norlist">${w.map(m=>`<li style="align-items:center"><span>${S.doc&&S.doc._key===m.key?"●":"○"}</span><span style="flex:1;min-width:0"><b style="word-break:break-word">${esc(m.judul||m.name)}</b><br><span class="small muted">${esc(m.name)} · ${esc(when(m.savedAt))}</span><br>${(m.prog||[]).map(p=>`<span class="chip" style="font-size:11px;padding:1px 7px;margin:3px 4px 0 0">${esc(p)}</span>`).join("")}</span>
+      <span style="display:flex;gap:6px;flex:none"><button class="btn sm ${S.doc&&S.doc._key===m.key?"":"primary"}" data-workopen="${esc(m.key)}">${S.doc&&S.doc._key===m.key?"Sedang dibuka":"Buka"}</button><button class="btn sm" data-workdel="${esc(m.key)}" title="Hapus dari perangkat">Hapus</button></span></li>`).join("")}</ul>
+    <div class="toolbar" style="margin:8px 0 0"><button class="btn sm" data-workdel="">Hapus semua naskah tersimpan</button></div></div>`;
+}
+
 /* ═════════════ RUN ═════════════ */
 const WEIGHTS = {struktur:{e:5,w:2,cap:25},isi:{e:3,w:1,cap:15},abstrak:{e:3,w:1.5,cap:12},bahasa:{e:1.5,w:.5,cap:12},sitasi:{e:2,w:1,cap:16},visual:{e:2,w:1,cap:8},format:{e:3,w:1.5,cap:12}};
 const STEPS = ["Membaca susunan bab dan sub-bab","Memeriksa isi setiap bab","Memeriksa abstrak dan kata kunci","Memeriksa ejaan dan diksi","Mencocokkan sitasi dengan daftar pustaka","Memeriksa tabel, gambar, dan format"];
@@ -4800,7 +4879,7 @@ function vChat(){
     ${S.chat.length?`<button class="linkish" data-act="chatclear" style="align-self:flex-start">Mulai percakapan baru</button>`:""}</div>`;
 }
 function vUnggah(){
-  return `${!S.doc?`<div class="notice">${icon(IC.info)}<div>Belum ada naskah. Unggah berkas atau tempel teks, lalu tekan <b>Mulai analisis</b>.</div></div>`:""}<section class="grid">
+  return vWorks() + `${!S.doc?`<div class="notice">${icon(IC.info)}<div>Belum ada naskah. Unggah berkas atau tempel teks, lalu tekan <b>Mulai analisis</b>.</div></div>`:""}<section class="grid">
     <div class="card c6"><h3>Unggah berkas</h3>
       <div class="drop" id="drop">
         <input type="file" id="fileIn2" class="pick" accept=".docx,.pdf,.txt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf,text/plain" aria-label="Pilih berkas naskah (.docx, .pdf, atau .txt)" ${S.fileBusy?"disabled":""}>
@@ -4840,7 +4919,7 @@ function render(){
   const [t,sub] = staging ? ["Mulai Analisis","Naskah sudah dimuat"] : viewMeta(S.view);
   $("#vtitle").textContent = t; $("#vsub").textContent = sub;
   const d=S.doc;
-  $("#docline").innerHTML = d ? `<span class="chip">${icon(IC.doc).replace("<svg","<svg style='width:13px;height:13px'")}${esc(d.name)}</span>${d.source==="contoh"?`<span class="chip ex">Naskah contoh</span>`:""}${isArt()?`<span class="chip modechip">Artikel · Nusantara of Research</span>`:""}<span class="chip">${d.paras.length} paragraf${d.pages?` · ${d.pages} halaman`:""}</span>${S.local?"":`<span class="chip ex">Belum dianalisis</span>`}` : `<span class="chip">Belum ada naskah</span>`;
+  $("#docline").innerHTML = d ? `<span class="chip">${icon(IC.doc).replace("<svg","<svg style='width:13px;height:13px'")}${esc(d.name)}</span>${d.source==="contoh"?`<span class="chip ex">Naskah contoh</span>`:""}${isArt()?`<span class="chip modechip">Artikel · Nusantara of Research</span>`:""}<span class="chip">${d.paras.length} paragraf${d.pages?` · ${d.pages} halaman`:""}</span>${S.local?"":`<span class="chip ex">Belum dianalisis</span>`}${d.source!=="contoh"?`<span class="chip" id="savedChip" title="Hasil kerja naskah ini tersimpan otomatis di perangkat">${savedLabel()||"Menyimpan otomatis…"}</span>`:""}` : `<span class="chip">Belum ada naskah</span>`;
   $("#btnRun").disabled = !S.doc || S.running;
   $("#btnAI").disabled = !S.local || S.aiBusy;
   $("#btnAI").lastChild.textContent = isArt() ? "Review reviewer" : "Tinjau dengan Claude";
@@ -4859,6 +4938,7 @@ function render(){
   if (keep){ const el=document.getElementById(keep.id); if (el){ el.focus({preventScroll:true}); try{ if (keep.s!=null) el.setSelectionRange(keep.s, keep.e); }catch(_){} } }
   $("#foot").textContent = `${isArt()?"Template artikel jurnal Nusantara of Research":"Pedoman KTI 2025"} · Hasil bersifat pendamping; keputusan akhir tetap pada dosen pembimbing dan editor.`;
   const msgs=$("#msgs"); if(msgs) msgs.scrollTop=msgs.scrollHeight;
+  scheduleSave();
 }
 function go(view){ closeMenu(); S.view=view; render(); try{localStorage.setItem("kti.view",view)}catch(e){} window.scrollTo({top:0}); }
 function gotoPara(i){
@@ -4871,7 +4951,7 @@ function gotoPara(i){
 function invalidate(){ S.excl=new Set(); if (S.inst&&S.inst.ctl) S.inst.ctl.abort(); S.inst=null; if (S.gram&&S.gram.ctl) S.gram.ctl.abort(); S.gram=null; S.aicheck=null; if (S.sim){ if (S.sim.ctl) S.sim.ctl.abort(); S.sim.rows=null; } S.ce=null; S.local=null; S.rev=null; S.revSel=null; S.ai=null; S.aiErr=""; S.filter={}; S.babSel="all"; }
 function setDoc(doc){
   if (S.aiCtl) S.aiCtl.abort();
-  S.doc = doc; invalidate(); S.chat=[]; S.finalMode=false; if (S.ojs) S.ojs = {src:"", ed:{}, busy:false, err:"", trMode:S.ojs.trMode||"auto", tr:{key:"", busy:false, err:"", data:null}}; S.ojsWiz=null; if (S.adm){ S.adm.filled=false; S.adm.reg=""; S.adm.doi=""; S.adm.nomor=""; S.adm.noart=""; }
+  S.doc = doc; invalidate(); S.chat=[]; S.finalMode=false; if (S.ojs) S.ojs = {src:"", ed:{}, busy:false, err:"", trMode:S.ojs.trMode||"auto", tr:{key:"", busy:false, err:"", data:null}}; S.ojsWiz=null; if (S.adm){ S.adm.filled=false; S.adm.reg=""; S.adm.doi=""; S.adm.nomor=""; S.adm.noart=""; S.adm.paid=false; S.adm.invJenis="deposit"; S.adm._ceSig=""; }
   if (doc.jenis){ S.jenis=doc.jenis; $("#selJenis").value=doc.jenis; }
   if (doc.tahap){ S.tahap=doc.tahap; $("#selTahap").value=doc.tahap; }
 }
@@ -4954,6 +5034,8 @@ async function handleFile(f, opt={}){
     S.fileBusy=false;
     setDoc({name, ...r});
     guessProfile();
+    const found = await workFind(S.doc).catch(()=>null);
+    if (found){ applyWork(found.rec, found.meta); if (!opt.final || (S.ce && S.ce.E)){ if (opt.final){ S.finalMode=true; S.tahap="Artikel"; } toast("Naskah ini pernah dikerjakan; semua hasil sebelumnya dipulihkan."); const v = opt.final ? "copyedit" : (found.meta && found.meta.view && viewMeta(found.meta.view) && found.meta.view!=="unggah" ? found.meta.view : "overview"); return go(v); } }
     if (opt.final){
       S.tahap="Artikel"; $("#selTahap").value="Artikel"; S.finalMode=true;
       const C=ceState(); C.src="upload"; C.edited=false;
@@ -5118,6 +5200,8 @@ document.addEventListener("click", e=>{
   const b = e.target.closest("button"); if(!b || b.disabled) return;
   if (b.id==="btnReset") return resetAll();
   if (b.dataset.cefooter){ ceState().meta.footer=b.dataset.cefooter; return render(); }
+  if (b.dataset.workopen!=null){ if (S.doc && S.doc._key===b.dataset.workopen) return go("overview"); return workOpen(b.dataset.workopen); }
+  if (b.dataset.workdel!=null){ const k=b.dataset.workdel; if (S.workDelArm!==k){ S.workDelArm=k; b.textContent = k ? "Ketuk lagi untuk menghapus" : "Ketuk lagi untuk menghapus semua"; setTimeout(()=>{ if (S.workDelArm===k){ S.workDelArm=null; render(); } }, 4000); return; } S.workDelArm=null; toast(k?"Naskah dihapus dari perangkat.":"Semua naskah tersimpan dihapus."); return workDelete(k); }
   if (b.dataset.norgo){ const [st,v]=b.dataset.norgo.split(":"); S.norStage=st; if (v==="ojs" && S.ce && S.ce.E) ojsState().src=S.ce.src; return go(v); }
   if (b.dataset.norstage){ S.norStage=b.dataset.norstage; return go("nor"); }
   if (b.dataset.view) return go(b.dataset.view);
@@ -5234,6 +5318,7 @@ document.addEventListener("click", e=>{ const a=e.target.closest && e.target.clo
   loadTplSpec().then(()=>{ if (S.view==="template") render(); });
   setDoc(JSON.parse(JSON.stringify(SAMPLE_KTI)));
   await analyzeLocal(false);
+  try{ const w = await workList(); if (w.length){ const rec = await workLoad(w[0].key); if (rec) applyWork(rec, w[0]); } }catch(e){ console.warn("pulihkan:", e); }
   try{ const v=localStorage.getItem("kti.view"); if(v && viewMeta(v) && !["chat","unggah"].includes(v)) S.view=v; }catch(e){}
   render();
   const c = window.claude;
