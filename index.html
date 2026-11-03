@@ -4212,7 +4212,7 @@ function vNor(){
         <p style="margin:0"><b>Di luar jangkauan aplikasi:</b> menugaskan reviewer, mengunggah berkas, dan menekan tombol keputusan di OJS tetap dilakukan di OJS. Aplikasi ini tidak bisa masuk ke akun OJS Anda.</p></div>
       <table class="nortbl"><thead><tr><th style="text-align:left">Tahap OJS</th><th>Tersedia</th><th>Sebagian</th><th>Belum ada</th></tr></thead><tbody>
         ${NOR_STAGES.map(s=>{ const it=NOR_NEEDS[s.id].items; return `<tr><td><button class="linkish" data-norstage="${s.id}">${s.grp==="Workflow"?"Workflow → ":""}${esc(s.label)}</button></td>${[2,1,0].map(k=>`<td style="text-align:center;color:${NOR_MARK[k][2]};font-weight:700">${it.filter(x=>x[0]===k).length||"–"}</td>`).join("")}</tr>`; }).join("")}
-      </tbody></table></div></div>`;
+      </tbody></table></div>${vNorArchive()}</div>`;
 }
 
 /* ═════════════ IDENTITAS PENULIS, DOI OTOMATIS, CARA MENGUTIP APA 7 ═════════════ */
@@ -4381,7 +4381,7 @@ async function admImages(id){
   const rels = await zip.file("word/_rels/document.xml.rels").async("string"); const doc = await zip.file("word/document.xml").async("string");
   const tgt = {}; for (const m of rels.matchAll(/Id="(\w+)"[^>]*Target="media\/([^"]+)"/g)) tgt[m[1]] = m[2];
   const order = [...doc.matchAll(/r:embed="(\w+)"/g)].map(m=>tgt[m[1]]).filter(Boolean);
-  const toPng = async f => { const b = await zip.file("word/media/"+f).async("blob"); const bmp = await createImageBitmap(b); const cv=document.createElement("canvas"); cv.width=bmp.width; cv.height=bmp.height; const g=cv.getContext("2d"); g.drawImage(bmp,0,0); return {url:cv.toDataURL("image/png"), w:bmp.width, h:bmp.height}; };
+  const toPng = async f => { const b = await zip.file("word/media/"+f).async("blob"); const bmp = await createImageBitmap(b); const k=Math.min(1, 480/Math.max(bmp.width,bmp.height)); const cv=document.createElement("canvas"); cv.width=Math.round(bmp.width*k); cv.height=Math.round(bmp.height*k); const g=cv.getContext("2d"); g.imageSmoothingQuality="high"; g.drawImage(bmp,0,0,cv.width,cv.height); return {url:cv.toDataURL("image/png"), w:bmp.width, h:bmp.height}; };
   const out = {};
   for (const f of [...new Set(order)]){ const im = await toPng(f); const r = im.w/im.h;
     if (/\.gif$/i.test(f)) out.ttd = im; else if (im.w===im.h) out.logo = im; else if (im.w<200) (out.issn = out.issn||[]).push(im); else out.device = im; }
@@ -4414,7 +4414,7 @@ async function admPdfFrame(doc, kind){
   doc.setFillColor(...hexRgb(NOR_SIDE[kind])); doc.rect(X0, Y0, SW, SH, "F");
   [["C00000",0,.2],["00B0F0",.2,.55],["F79646",.55,.67],["92D050",.67,1]].forEach(([c,a,b])=>{ doc.setFillColor(...hexRgb(c)); doc.rect(X0+SW, Y0+SH*a, 5, SH*(b-a), "F"); });
   doc.setTextColor(255,255,255); let y;
-  if (im.logo) doc.addImage(im.logo.url, "PNG", X0+(SW-120)/2-4, Y0, 120, 120);
+  if (im.logo) doc.addImage(im.logo.url, "PNG", X0+(SW-120)/2-4, Y0, 120, 120, undefined, "FAST");
   y = Y0+138; const tx=X0+14, tw=SW-24;
   const blk = (head, body, sz=8.5) => { if (head){ doc.setFont("helvetica","bold"); doc.setFontSize(sz); doc.text(head, tx, y); y+=sz*1.3; } doc.setFont("helvetica","normal"); doc.setFontSize(sz); doc.splitTextToSize(body, tw).forEach(l=>{ doc.text(l, tx, y); y+=sz*1.3; }); y+=6; };
   doc.setTextColor(255,255,255); y = pdfRich(doc, [{t:"Pengelola: ",b:true},{t:"Program Studi Bimbingan dan Konseling"}], tx, y, tw, {size:9, lh:11.5}) + 8;
@@ -4422,9 +4422,9 @@ async function admPdfFrame(doc, kind){
   doc.setFont("helvetica","bold"); doc.setFontSize(10.5); doc.splitTextToSize("Universitas Nusantara PGRI Kediri", tw).forEach(l=>{ doc.text(l, tx, y); y+=13; }); y+=4;
   blk("", "Jl. KH. Ahmad Dahlan No. 76, Kota Kediri 64112", 7.5); blk("", "Phone [0354-771576]\nFax [771503]\n[jurnal.nor2014@gmail.com]", 7.5);
   blk("Principal Contact:", "Guruh Sukma Hanggara\nWA [085233036100]\n[kangguruh@unpkediri.ac.id]", 7.5);
-  y += 6; (im.issn||[]).slice(0,2).forEach((b,i)=>{ doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.text(i?"P-ISSN:":"E-ISSN:", tx, y); y+=4; doc.setFillColor(255,255,255); doc.rect(tx, y, 68, 46, "F"); doc.addImage(b.url, "PNG", tx, y, 68, 46); y+=58; });
+  y += 6; (im.issn||[]).slice(0,2).forEach((b,i)=>{ doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.text(i?"P-ISSN:":"E-ISSN:", tx, y); y+=4; doc.setFillColor(255,255,255); doc.rect(tx, y, 68, 46, "F"); doc.addImage(b.url, "PNG", tx, y, 68, 46, undefined, "FAST"); y+=58; });
   const nY = Y0+SH-16; // nomor artikel di ujung bawah panel
-  if (im.device){ const w=112, h=w*im.device.h/im.device.w; doc.addImage(im.device.url, "PNG", tx-2, nY-h-14, w, h); }
+  if (im.device){ const w=112, h=w*im.device.h/im.device.w; doc.addImage(im.device.url, "PNG", tx-2, nY-h-14, w, h, undefined, "FAST"); }
   if (kind==="loa"){ doc.setTextColor(255,255,255); doc.setFont("helvetica","normal"); doc.setFontSize(8); const t1="No Artikel #"; doc.text(t1, tx, nY); const w1=doc.getTextWidth(t1); doc.setFont("helvetica","bold"); doc.setFontSize(9.5); doc.text(pdfSafe(admNoArtikel(A)||"-"), tx+w1+1, nY); }
   // kop di kolom kanan
   const RX=200, RW=PW-36-RX; doc.setTextColor(0,0,0);
@@ -4440,7 +4440,7 @@ async function admPdfFrame(doc, kind){
 function admPdfSign(doc, F, y, tgl){
   const cx = F.RX + F.RW - 95; doc.setFont("helvetica","normal"); doc.setFontSize(10.5); doc.setTextColor(0,0,0);
   doc.text(pdfSafe("Kediri, "+tgl), cx, y, {align:"center"}); doc.text("Ketua Dewan Redaksi,", cx, y+14, {align:"center"});
-  if (F.im.ttd){ const w=140, h=w*F.im.ttd.h/F.im.ttd.w; doc.addImage(F.im.ttd.url, "PNG", cx-w/2, y+18, w, h); }
+  if (F.im.ttd){ const w=140, h=w*F.im.ttd.h/F.im.ttd.w; doc.addImage(F.im.ttd.url, "PNG", cx-w/2, y+18, w, h, undefined, "FAST"); }
   doc.setFont("helvetica","bold"); doc.text("Guruh Sukma Hanggara, M.Pd", cx, y+102, {align:"center"});
   doc.setFont("helvetica","normal"); doc.text("NIDN. 0705068606", cx, y+116, {align:"center"});
   return cx;
@@ -4456,7 +4456,7 @@ async function buildLOAPdf(){
   y+=8; y = pdfRich(doc, [{t:"Demikian surat keterangan ini dibuat untuk digunakan semestinya. Atas perhatian dan kerja samanya disampaikan terima kasih."}], RX, y, RW, {align:"justify"});
   const sy = Math.max(y+40, 540); admPdfSign(doc, F, sy, tglIndo(A.tgl));
   // barcode DOI di ujung kanan bawah halaman
-  if (doi){ const bc = await barcodePNG(doi); const w=200, h=30, R=RX+RW; doc.addImage(bytesUrl(bc.bytes), "PNG", R-w, F.bottom-h-6, w, h); doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(0,0,0); doc.text(doi, R, F.bottom+2, {align:"right"}); }
+  if (doi){ const bc = await barcodePNG(doi); const w=200, h=30, R=RX+RW; doc.addImage(bytesUrl(bc.bytes), "PNG", R-w, F.bottom-h-6, w, h, undefined, "FAST"); doc.setFont("helvetica","normal"); doc.setFontSize(7.5); doc.setTextColor(0,0,0); doc.text(doi, R, F.bottom+2, {align:"right"}); }
   return doc.output("blob");
 }
 async function buildInvoicePdf(paket){
@@ -4485,7 +4485,7 @@ async function buildInvoicePdf(paket){
   y = pdfRich(doc, [{t:"ke Rekening "},{t:"BSI",b:true},{t:" (Bank Syariah Indonesia), "},{t:"No Rek. 1025376036",b:true},{t:" a.n "},{t:"Guruh Sukma Hanggara.",b:true}], RX, y, RW);
   y+=6; y = pdfRich(doc, [{t:"Demikian Pemberitahuan Kami, Atas Kerja Sama dan Tindak Lanjutnya Kami Menyampaikan Terima Kasih."}], RX, y, RW, {align:"justify"});
   const sy = Math.max(y+22, 580); admPdfSign(doc, F, sy, tglIndo(A.tglInv));
-  if (A.paid){ const st = await paidStampPNG(tglIndo(A.tglBayar||A.tglInv)||tglIndo(isoToday())); const w=170, h=w*st.h/st.w; doc.addImage(bytesUrl(st.bytes), "PNG", RX+4, sy+8, w, h); }
+  if (A.paid){ const st = await paidStampPNG(tglIndo(A.tglBayar||A.tglInv)||tglIndo(isoToday())); const w=170, h=w*st.h/st.w; doc.addImage(bytesUrl(st.bytes), "PNG", RX+4, sy+8, w, h, undefined, "FAST"); }
   return doc.output("blob");
 }
 async function admDownloadPdf(kind, paket){
@@ -4577,6 +4577,70 @@ function vWorks(){
     <ul class="norlist">${w.map(m=>`<li style="align-items:center"><span>${S.doc&&S.doc._key===m.key?"●":"○"}</span><span style="flex:1;min-width:0"><b style="word-break:break-word">${esc(m.judul||m.name)}</b><br><span class="small muted">${esc(m.name)} · ${esc(when(m.savedAt))}</span><br>${(m.prog||[]).map(p=>`<span class="chip" style="font-size:11px;padding:1px 7px;margin:3px 4px 0 0">${esc(p)}</span>`).join("")}</span>
       <span style="display:flex;gap:6px;flex:none"><button class="btn sm ${S.doc&&S.doc._key===m.key?"":"primary"}" data-workopen="${esc(m.key)}">${S.doc&&S.doc._key===m.key?"Sedang dibuka":"Buka"}</button><button class="btn sm" data-workdel="${esc(m.key)}" title="Hapus dari perangkat">Hapus</button></span></li>`).join("")}</ul>
     <div class="toolbar" style="margin:8px 0 0"><button class="btn sm" data-workdel="">Hapus semua naskah tersimpan</button></div></div>`;
+}
+
+/* ═════════════ ARSIP PUBLIKASI NOR: SEMUA BERKAS PER TAHAP (PUBLIKASI NOR/<register>/<tahap>/…) ═════════════ */
+const NOR_ROOT = "PUBLIKASI NOR";
+const NOR_DIRS = {submission:"1 Submission", review:"2 Review", copyediting:"3 Copyediting", production:"4 Production", publication:"5 Publication"};
+const fsName = s => String(s||"").replace(/[\\/:*?"<>|]+/g," ").replace(/\s+/g," ").trim().slice(0,90);
+function norFolder(){ const A=admState(); const reg=String(A.reg||"").trim(); return reg ? fsName(reg) : `Belum ada register - ${fsName(smartTitle(A.judul||baseName()).split(/\s+/).slice(0,6).join(" "))}`; }
+// sementara mengganti jenis/status invoice untuk satu berkas, lalu mengembalikannya
+async function withInv(jenis, paid, fn){ const A=admState(); const k=[A.invJenis, A.paid]; A.invJenis=jenis; A.paid=paid; try{ return await fn(); } finally{ A.invJenis=k[0]; A.paid=k[1]; } }
+function norFiles(){
+  const A=admState(); const L=S.local; const out=[]; const art=isArt();
+  const add = (stage, name, ready, make, why) => out.push({stage, name, ready:!!ready, make, why});
+  const stageRep = (stage, cat, nm, ready, why) => [["docx",renderDocx],["pdf",renderPdf]].forEach(([ext,fn])=>add(stage, `${nm}.${ext}`, ready, ()=>fn(sectionModel(cat)), why));
+  // 1 Submission
+  stageRep("submission", "overall", "01 Raport Analisis Naskah", !!L, "jalankan analisis");
+  stageRep("submission", "template", "02 Kesesuaian Template", !!L && art, art?"jalankan analisis":"khusus artikel jurnal");
+  stageRep("submission", "grammar", "03 Cek Grammar", !!(L && S.gram && S.gram.items), "jalankan Cek Grammar");
+  stageRep("submission", "similarity", "04 Cek Similarity", !!(L && S.sim && S.sim.rows), "jalankan Cek Similarity");
+  stageRep("submission", "aicheck", "05 Cek Penggunaan AI", !!(L && S.aicheck && S.aicheck.rows), "jalankan Cek Penggunaan AI");
+  // 2 Review
+  add("review", "01 Laporan Review.docx", !!S.ai, ()=>buildReviewReportDocx(), "jalankan Review Reviewer");
+  add("review", "01 Laporan Review.pdf", !!S.ai, ()=>renderPdf(reviewModel()), "jalankan Review Reviewer");
+  if (S.ai && S.ai.mode==="review") revLabels().forEach((l,i)=>{ if (reviewComments(l).length) add("review", `02 Review ${String.fromCharCode(65+i)} - ${fsName(revName(l))}.docx`, true, async()=>(await buildCommentedDocx(l)).blob); });
+  else add("review", "02 Naskah berkomentar per reviewer.docx", false, null, "jalankan Review Reviewer");
+  add("review", "03 Naskah Revisi.docx", !!(S.rev && S.rev.done), ()=>buildRevisedDocx(), "jalankan Revisi Naskah");
+  add("review", "04 Naskah Revisi Instan.docx", !!(S.inst && S.inst.done), ()=>buildRevisedDocx(instantParas()), "jalankan Revisi Instan");
+  stageRep("review", "banding", "05 Perbandingan Revisi", !!(S.cmp && S.cmp.res), "jalankan Bandingkan Revisi");
+  const invOk = !admMissing(A,"inv").length, paket=A.paket||"reguler";
+  add("review", `06 Invoice Deposit ${PAKET[paket].label}.docx`, invOk, ()=>buildInvoice(paket, "deposit", false), "isi data LOA & Invoice");
+  add("review", `06 Invoice Deposit ${PAKET[paket].label}.pdf`, invOk, ()=>withInv("deposit", false, ()=>buildInvoicePdf(paket)), "isi data LOA & Invoice");
+  // 3 Copyediting
+  add("copyediting", "01 Artikel sesuai Template NOR.docx", !!(S.ce && S.ce.E), ()=>buildTemplateDocx(S.ce.E, S.ce.meta), "ekstrak artikel di Copyediting");
+  // 4 Production
+  const loaOk = !admMissing(A,"loa").length;
+  add("production", "01 LOA.docx", loaOk, ()=>buildLOA(), "lengkapi data LOA");
+  add("production", "01 LOA.pdf", loaOk, ()=>buildLOAPdf(), "lengkapi data LOA");
+  const inv = `02 Invoice ${PAKET[paket].label}${A.paid?" PAID":""}`;
+  add("production", inv+".docx", invOk, ()=>buildInvoice(paket, "akhir", !!A.paid), "isi data LOA & Invoice");
+  add("production", inv+".pdf", invOk, ()=>withInv("akhir", !!A.paid, ()=>buildInvoicePdf(paket)), "isi data LOA & Invoice");
+  // 5 Publication
+  stageRep("publication", "ojs", "01 Metadata OJS", !!S.doc, "unggah naskah");
+  return out.map(f=>({...f, path:`${NOR_ROOT}/${norFolder()}/${NOR_DIRS[f.stage]}/${f.name}`}));
+}
+async function norZip(){
+  if (!window.JSZip) return toast("Pustaka ZIP gagal dimuat.");
+  if (S.norZipBusy) return; S.norZipBusy=true; render();
+  const files = norFiles().filter(f=>f.ready); const zip=new JSZip(); const notes=[]; let n=0;
+  try{
+    for (const f of files){ S.norZipProg=`Menyusun ${++n}/${files.length}: ${f.name}`; const el=document.getElementById("norZipProg"); if (el) el.textContent=S.norZipProg;
+      try{ const b = await f.make(); if (b) zip.file(f.path, b); }catch(e){ console.warn(f.path, e); notes.push(`${f.path}: ${e.message||e}`); } }
+    const missing = norFiles().filter(f=>!f.ready).map(f=>`- ${NOR_DIRS[f.stage]}/${f.name}: belum ada (${f.why})`);
+    zip.file(`${NOR_ROOT}/${norFolder()}/_Daftar isi.txt`, `Arsip ${NOR_NAME}\nNaskah: ${admState().judul||baseName()}\nNomor register: ${admState().reg||"-"}\nDisusun: ${tglIndo(isoToday())}\n\nBelum tersedia:\n${missing.join("\n")||"- (semua tersedia)"}\n${notes.length?"\nGagal dibuat:\n"+notes.map(x=>"- "+x).join("\n"):""}\n`);
+    const blob = await zip.generateAsync({type:"blob"});
+    await saveFile(`${fsName(NOR_ROOT)} - ${norFolder()}.zip`, blob, `Arsip ${files.length-notes.length} berkas disimpan${notes.length?`; ${notes.length} gagal`:""}.`);
+  } finally { S.norZipBusy=false; S.norZipProg=""; render(); }
+}
+function vNorArchive(){
+  const files=norFiles(); const ok=files.filter(f=>f.ready).length; const sg=norStage();
+  const list = st => files.filter(f=>f.stage===st);
+  return `<div class="card c12"><h3>Arsip berkas per tahap<span class="r">${ok}/${files.length} berkas siap</span></h3>
+    <p class="small muted" style="margin:0 0 8px">Semua berkas naskah ini disusun dalam folder <b>${esc(NOR_ROOT)} / ${esc(norFolder())} /</b> per tahap. Unduh sebagai satu .zip, lalu ekstrak atau unggah ke Google Drive.</p>
+    <div class="grid" style="gap:10px">${Object.keys(NOR_DIRS).map(st=>`<div class="c4" style="min-width:0;padding:10px;border:1px solid var(--line);border-radius:12px;${st===sg.id?"background:var(--surface-2)":""}"><div class="small" style="font-weight:800;margin-bottom:4px">📁 ${esc(NOR_DIRS[st])}</div>
+      <ul class="norlist">${list(st).map(f=>`<li><span style="color:${f.ready?"var(--ok,#1b873f)":"var(--muted)"};font-weight:800">${f.ready?"✓":"○"}</span><span class="small" style="word-break:break-word">${esc(f.name)}${f.ready?"":`<br><span class="muted">${esc(f.why)}</span>`}</span></li>`).join("")}</ul></div>`).join("")}</div>
+    <div class="toolbar" style="margin:12px 0 0"><button class="btn primary" data-act="norzip" ${ok&&!S.norZipBusy?"":"disabled"}>${S.norZipBusy?"Menyusun arsip…":"Unduh arsip semua tahap (.zip)"}</button><span class="small muted" id="norZipProg">${esc(S.norZipProg||"")}</span></div></div>`;
 }
 
 /* ═════════════ RUN ═════════════ */
@@ -5202,6 +5266,7 @@ document.addEventListener("click", e=>{
   if (b.dataset.cefooter){ ceState().meta.footer=b.dataset.cefooter; return render(); }
   if (b.dataset.workopen!=null){ if (S.doc && S.doc._key===b.dataset.workopen) return go("overview"); return workOpen(b.dataset.workopen); }
   if (b.dataset.workdel!=null){ const k=b.dataset.workdel; if (S.workDelArm!==k){ S.workDelArm=k; b.textContent = k ? "Ketuk lagi untuk menghapus" : "Ketuk lagi untuk menghapus semua"; setTimeout(()=>{ if (S.workDelArm===k){ S.workDelArm=null; render(); } }, 4000); return; } S.workDelArm=null; toast(k?"Naskah dihapus dari perangkat.":"Semua naskah tersimpan dihapus."); return workDelete(k); }
+  if (b.dataset.act==="norzip") return norZip();
   if (b.dataset.norgo){ const [st,v]=b.dataset.norgo.split(":"); S.norStage=st; if (v==="ojs" && S.ce && S.ce.E) ojsState().src=S.ce.src; return go(v); }
   if (b.dataset.norstage){ S.norStage=b.dataset.norstage; return go("nor"); }
   if (b.dataset.view) return go(b.dataset.view);
