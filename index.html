@@ -1435,64 +1435,135 @@ function checkLanguageID(M, hasEm, idSet){
 
 /* ═════════════ CHECKS: sitasi ═════════════ */
 const NAME = "[A-Z][A-Za-zÀ-ÿ'’\\-]+";
+const NAME_P = `(?:\\b(?:van|von|de|der|den|du|del|da|bin|binti|ibn|al|el|le|la)\\s+)*${NAME}`;
+const YEAR_TOK = "(?:\\d{4}[a-z]?|n\\.\\s?d\\.|t\\.\\s?t\\.|in press|dalam proses terbit)";
+const LOCATOR = "(?:\\s*[,:]\\s*(?:(?:hlm|hal|h|p|pp|para|bab|chap|halaman)\\.?\\s*)?\\d+(?:\\s*[-–]\\s*\\d+)?)";
+const CITE_NOISE = /^(Tabel|Gambar|Grafik|Diagram|Tahun|Jan|Feb|Mar|Apr|Mei|May|Jun|Jul|Agu|Aug|Sep|Okt|Oct|Nov|Des|Dec|Pasal|Ayat|UU|Undang|Peraturan|Permendikbud|Nomor|No|Vol|Hlm|Hal|Bab|Lampiran|Rumus|Persamaan|Siklus|Tahap|Kelas|Semester|Pertemuan|Periode|Sejak|Hingga|Sampai|Tahap|Fase|Gelombang)\b/;
+const NAME_STOP = new Set(["dan","and","&","of","the","for","in","on","van","von","de","der","den","du","del","da","bin","binti","ibn","al","el","le","la","et","dkk"]);
+// kata nama (huruf kecil, tanpa diakritik) dari bagian penulis
+const nameWords = s => fold(String(s||"").replace(/\[[^\]]*\]/g," ")).replace(/[^a-z0-9\-'’ ]+/g," ").split(/\s+/).filter(w=>w.length>1 && !NAME_STOP.has(w));
+const yearKey = y => { const s=String(y||"").toLowerCase().replace(/\s/g,""); if (/^\d{4}/.test(s)) return s.slice(0,5).replace(/[^0-9a-z]/g,""); if (/^(n\.d\.|t\.t\.)$/.test(s)) return "nd"; if (/press|terbit/.test(s)) return "press"; return s; };
+// awal sebuah entri daftar rujukan: Penulis, A. B. / Lembaga. (Tahun) / Penulis (Tahun)
+const REF_START = new RegExp(`^(?:${NAME_P}|[A-Z]{2,})(?:[ \\-](?:[A-Za-zÀ-ÿ'’\\-]+|&))*?(?:,\\s*(?:[A-Z][a-z]?\\.\\s*-?\\s*)+(?:[,&(]|$)|,\\s*(?:[A-Z][a-z]?\\.\\s*)+\\(|\\.?\\s*\\((?:\\d{4}[a-z]?|n\\.\\s?d\\.|t\\.\\s?t\\.|in press)[^)]*\\))`);
+function refHasYear(t){ return /\((\d{4}[a-z]?|n\.\s?d\.|t\.\s?t\.|in press)[^)]*\)|\b(1[89]|20)\d{2}\b|\bn\.\s?d\./i.test(t); }
+// pecah satu paragraf yang berisi beberapa entri (hasil tempel, PDF, atau Shift+Enter)
+function splitRefText(t){
+  const lines = String(t).split(/\n+/).map(s=>s.trim()).filter(Boolean); const out=[];
+  for (const ln of lines){
+    const cuts=[0]; const re=/\s+/g; let m;
+    while ((m=re.exec(ln))){
+      const pos=m.index+m[0].length, prev=ln.slice(0,m.index), rest=ln.slice(pos);
+      const prevEnd = /[.)]$/.test(prev) || /(https?:\/\/|doi\.org\/|\b10\.\d{4,}\/)\S*$/.test(prev);
+      if (prevEnd && REF_START.test(rest) && refHasYear(rest.slice(0,260)) && refHasYear(ln.slice(cuts[cuts.length-1], m.index)) && m.index-cuts[cuts.length-1]>25) cuts.push(pos);
+    }
+    cuts.forEach((c,i)=>out.push(ln.slice(c, cuts[i+1]).trim()));
+  }
+  return out.filter(Boolean);
+}
 function parseRefs(M){
-  const refs = M.paras.filter(p=>p.region==="pustaka" && !p.isHead && p.text.length>15 && /(\(|\b)(\d{4}|n\.d\.|t\.t\.)/.test(p.text));
-  return refs.map(p=>{
-    const t=p.text; const ym = /\((\d{4})[a-z]?\)|\b(\d{4})\b/.exec(t);
-    const surname = (/^([^,.(]+)/.exec(t)||[,""])[1].trim().split(/\s+/).pop();
-    return {p, text:t, year: ym ? +(ym[1]||ym[2]) : null, surname, key: fold(surname), journal: /(doi\.org|doi:|jurnal|journal|proceeding|prosiding|vol\.|\d+\s*\(\d+\)|skripsi|tesis|disertasi|laporan penelitian)/i.test(t), doi: /(doi\.org|doi:)/i.test(t)};
+  const entries=[]; let cur=null;
+  for (const p of M.paras.filter(p=>p.region==="pustaka" && !p.isHead && p.text && p.tag!=="table")){
+    for (const piece of splitRefText(p.text)){
+      const starts = REF_START.test(piece) || (refHasYear(piece.slice(0,160)) && /^[A-Z]/.test(piece));
+      if (!starts && cur) cur.text += " "+piece;
+      else { cur={p, text:piece}; entries.push(cur); }
+    }
+  }
+  return entries.filter(e=>e.text.length>15 && refHasYear(e.text)).map(e=>{
+    const t=e.text;
+    const ym = /\((\d{4}[a-z]?|n\.\s?d\.|t\.\s?t\.|in press)(?:,[^)]*)?\)/i.exec(t) || /\b((?:1[89]|20)\d{2}[a-z]?)\b/.exec(t) || /\b(n\.\s?d\.)/i.exec(t);
+    const zoneTxt = ym ? t.slice(0, ym.index) : (t.split(/\.\s/)[0]||t);
+    const yk = ym ? yearKey(ym[1]) : null;
+    const first = (/^([^,(]+?)(?:,|\.\s*\(|\s*\(|$)/.exec(zoneTxt)||[,zoneTxt])[1].trim().replace(/\.$/,"");
+    const fw = nameWords(first); const personal = /,\s*[A-Z][a-z]?\./.test(zoneTxt) || fw.length<=1;
+    const surname = personal ? (first.split(/\s+/).filter(Boolean).pop()||"").replace(/[.,]$/,"") : first.replace(/\s*\[[^\]]*\]\s*/g," ").trim();
+    const acr = personal ? "" : ((/\[([A-Z]{2,10})\]/.exec(zoneTxt)||[])[1] || first.split(/\s+/).filter(w=>/^[A-Z]/.test(w)).map(w=>w.split("-").map(x=>x[0]).join("")).join("").toUpperCase());
+    return {p:e.p, text:t, year: yk && /^\d{4}/.test(yk) ? +yk.slice(0,4) : null, yk, surname, first, key: fold(surname), firstWords: fw, acr, zone: new Set(nameWords(zoneTxt)),
+      journal: /(doi\.org|doi:|jurnal|journal|proceeding|prosiding|vol\.|\d+\s*\(\d+\)|skripsi|tesis|disertasi|laporan penelitian)/i.test(t), doi: /(doi\.org|doi:)/i.test(t)};
   });
+}
+// pecah "Penulis A, Penulis B, & Penulis C" menjadi kelompok nama
+function citeAuthors(who){
+  const w = String(who).replace(/\s+(?:et\s+al\.?|dkk\.?)\s*$/i,"").replace(/\[[^\]]*\]/g," ");
+  return w.split(/\s*(?:,|;|&|\band\b)\s*|\s+dan\s+(?=[A-Z])/).map(s=>s.trim()).filter(s=>/[A-Za-z]/.test(s));
+}
+function citeMatch(c, refs){
+  const yk = yearKey(c.year); const groups = citeAuthors(c.who).map(nameWords).filter(g=>g.length);
+  if (!groups.length) return {hit:null, sameName:[]};
+  const lastOf = g => g[g.length-1];
+  const yearsOk = r => r.yk===yk || (r.yk && yk && r.yk.slice(0,4)===yk.slice(0,4) && /^\d{4}$/.test(r.yk.length<yk.length?r.yk:yk));
+  const pick = arr => arr.find(r=>r.yk===yk) || arr[0];
+  const exact = refs.filter(r=>yearsOk(r) && r.firstWords.length && (lastOf(r.firstWords)===lastOf(groups[0]) || r.firstWords.join(" ")===groups[0].join(" ")));
+  if (exact.length) return {hit:pick(exact), sameName:[]};
+  const loose = refs.filter(r=>yearsOk(r) && groups.some(g=>g.every(w=>r.zone.has(w))));
+  if (loose.length) return {hit:pick(loose), sameName:[]};
+  const ac = (/^[A-Z]{2,10}$/.exec(citeAuthors(c.who)[0]||"")||[])[0] || (/\[([A-Z]{2,10})\]/.exec(c.who)||[])[1];
+  if (ac){ const a = refs.filter(r=>r.acr===ac); const ay=a.filter(yearsOk); if (ay.length) return {hit:pick(ay), sameName:[]}; if (a.length) return {hit:null, sameName:a}; }
+  const sameName = refs.filter(r=>groups.some(g=>g.every(w=>r.zone.has(w))) || (r.firstWords.length && lastOf(r.firstWords)===lastOf(groups[0])));
+  return {hit:null, sameName};
 }
 function checkCitations(M){
   const out=[]; const cites=[]; const art=isArt();
   const body = M.paras.filter(p=>p.region!=="pustaka" && p.tag!=="table" && !p.isHead && p.text && !p.toc && !/^cara\s+mengutip/i.test(p.text));
-  const narr = new RegExp(`(${NAME}(?:\\s*(?:&|dan)\\s*${NAME}|\\s+(?:et al\\.?|dkk\\.?))?)\\s*\\((\\d{4}[a-z]?)(?:\\s*[:,]\\s*(?:hlm\\.?\\s*)?\\d+(?:[-–]\\d+)?)?\\)`,"g");
-  const paren = /\(([^()]*?\b\d{4}[a-z]?\b[^()]*?)\)/g;
+  const narr = new RegExp(`(${NAME_P}(?:\\s*,\\s*${NAME_P})*(?:\\s*,?\\s*(?:&|dan|and)\\s+${NAME_P})?(?:\\s+(?:et\\s+al\\.?|dkk\\.?))?)(?:\\s*\\[[^\\]]{1,20}\\])?\\s*\\((${YEAR_TOK}(?:\\s*[,;]\\s*${YEAR_TOK})*)${LOCATOR}?\\)`,"g");
+  const paren = /\(([^()]*?(?:\b\d{4}[a-z]?\b|n\.\s?d\.|t\.\s?t\.|in press)[^()]*?)\)/g;
+  const pushCite = (p, who, years, raw) => { String(years).split(/\s*[,;]\s*/).filter(y=>new RegExp(`^${YEAR_TOK}$`,"i").test(y)).forEach(y=>cites.push({p, who:who.trim(), year:y, raw})); };
   for (const p of body){
     const t=p.text; let m;
     narr.lastIndex=0;
     while((m=narr.exec(t))){
-      const who=m[1]; if (/^(Tabel|Gambar|Grafik|Tahun|Jan|Feb|Mar|Apr|Mei|Jun|Jul|Agu|Sep|Okt|Nov|Des|Pasal|Ayat|UU|Nomor|Vol)/.test(who)) continue;
-      cites.push({p, who, year:m[2], key:fold(who.split(/\s*(?:&|dan|et al|dkk)/)[0].trim().split(/\s+/).pop()), raw:m[0]});
+      let who=m[1];
+      // nama lembaga/negara di depan koma bukan penulis: "Di Indonesia, Sugiyono (2019)"
+      if (CITE_NOISE.test(who)) continue;
+      // tanda kurung pembuka sebelum nama berarti ini sitasi dalam kurung, bukan naratif
+      if (/\(\s*[^()]*$/.test(t.slice(0,m.index)) && !/\)\s*[^()]*$/.test(t.slice(0,m.index))) continue;
+      pushCite(p, who, m[2], m[0]);
       if (/\s&\s/.test(who)) out.push(F("sitasi","error","Sitasi naratif memakai \"&\"",`Di luar kurung, nama penulis dihubungkan dengan "dan".`,{p:p.i,quote:m[0],fix:m[0].replace(/\s&\s/," dan ")}));
       if (/(dkk|et al)(?!\.)/.test(who)) out.push(F("sitasi","error",`"${/dkk/.test(who)?"dkk":"et al"}" tanpa titik`,"Singkatan ditulis dengan titik: dkk. / et al.",{p:p.i,quote:m[0],fix:m[0].replace(/(dkk|et al)(?!\.)/,"$1.")}));
     }
     paren.lastIndex=0;
     while((m=paren.exec(t))){
       const inner=m[1];
-      if (!/[A-Z][a-z]/.test(inner) || /^(\d|hlm|halaman|p\.)/i.test(inner.trim())) continue;
-      for (const part of inner.split(";")){
-        const pm = new RegExp(`(${NAME}(?:[^,;]*?))\\s*,\\s*(\\d{4}[a-z]?)`).exec(part);
-        if (pm) cites.push({p, who:pm[1].trim(), year:pm[2], key:fold(pm[1].trim().split(/\s*(?:&|dan|,|et al|dkk)/)[0].trim().split(/\s+/).pop()), raw:"("+inner+")"});
+      if (!/[A-Z]/.test(inner) || /^\s*(\d|hlm|hal|halaman|p\.|pp\.)/i.test(inner)) continue;
+      let any=false;
+      for (let part of inner.split(";")){
+        part = part.trim().replace(/^(lihat|lih\.|see|e\.g\.,?|misalnya|bandingkan|cf\.)\s+/i,"");
+        const dm = /\b(?:dalam|as cited in|sebagaimana dikutip(?:\s+dalam)?)\s+(.+)$/i.exec(part); if (dm) part = dm[1];
+        const ym = new RegExp(`(?:,\\s*|\\s+)(${YEAR_TOK}(?:\\s*,\\s*${YEAR_TOK})*)(?=\\s*(?:$|,|:))`,"i").exec(part);
+        if (!ym) continue;
+        const who = part.slice(0, ym.index).replace(/[\s,]+$/,"");
+        if (!new RegExp(`^(?:${NAME_P}|[A-Z]{2,})`).test(who) || CITE_NOISE.test(who)) continue;
+        any=true; pushCite(p, who, ym[1], "("+inner+")");
+        if (/^\s*[A-Z][a-z]+\s+dan\s+[A-Z][a-z]+\s*$/.test(who) && !/(Kementerian|Kemen|Badan|Dinas|Lembaga|Pusat|Direktorat|Universitas|Departemen|Organisasi|Pendidikan|Kebudayaan|Statistik)/.test(who)) out.push(F("sitasi","error","Sitasi dalam kurung memakai \"dan\"","Di dalam kurung, dua penulis dihubungkan dengan \"&\".",{p:p.i,quote:m[0],fix:m[0].replace(who, who.replace(/\s+dan\s+/," & "))}));
       }
+      if (!any) continue;
       const before = t.slice(Math.max(0,m.index-12), m.index);
       const after = t.slice(m.index+m[0].length, m.index+m[0].length+30);
       if (/menurut\s*$/i.test(before)) out.push(F("sitasi","error","\"Menurut\" diikuti kutipan dalam kurung","Nama penulis yang menjadi bagian kalimat ditulis di luar kurung.",{p:p.i,quote:"Menurut "+m[0],fix:"Menurut "+inner.replace(/\s*,\s*(\d{4})/," ($1)")}));
       else if (/^\s*(menyatakan|mengatakan|mengemukakan|berpendapat|menjelaskan|menyebutkan|menambahkan|mendefinisikan|menegaskan)/i.test(after)) out.push(F("sitasi","error","Penulis subjek kalimat ditulis dalam kurung","Saat penulis menjadi subjek kalimat, tulis Penulis (Tahun).",{p:p.i,quote:m[0]+after.split(/\s/).slice(0,2).join(" "),fix:inner.replace(/\s*,\s*(\d{4}[a-z]?)/," ($1)")+" "+after.trim().split(/\s/)[0]}));
-      if (/\.\s*$/.test(t.slice(0,m.index)) && /^\s*($|[A-Z])/.test(t.slice(m.index+m[0].length)) && !/^\s*(menyatakan|mengatakan|mengemukakan|berpendapat|menjelaskan)/i.test(after)){
-        const pre=t.slice(0,m.index).replace(/\s+$/,""); const ws=pre.lastIndexOf(" ")+1; const lw=pre.slice(ws).replace(/\.$/,"");
+      const pre=t.slice(0,m.index).replace(/\s+$/,""); const lastWord=pre.slice(pre.lastIndexOf(" ")+1);
+      const blockQuote = /^[“"]/.test(t.trim()) && /[”"]\.?\s*$/.test(pre);
+      if (/\.$/.test(pre) && !/^(dkk|al|[A-Z]|[A-Z][a-z]?|No|Vol|hlm|hal|dll|dsb|dst|cf|e\.g|i\.e)\.$/.test(lastWord) && !blockQuote && /^\s*($|[A-Z])/.test(t.slice(m.index+m[0].length)) && !/^\s*(menyatakan|mengatakan|mengemukakan|berpendapat|menjelaskan)/i.test(after)){
+        const ws=pre.lastIndexOf(" ")+1; const lw=pre.slice(ws).replace(/\.$/,"");
         out.push(F("sitasi","error","Titik diletakkan sebelum kutipan","Kutipan akhir kalimat ditulis sebelum titik: \"... hasil belajar (Penulis, Tahun).\"",{p:p.i,quote:t.slice(ws,m.index+m[0].length),fix:`... ${lw} ${m[0]}.`}));
       }
-      if (/\b[A-Z][a-z]+\s+dan\s+[A-Z][a-z]+\s*,\s*\d{4}/.test(inner)) out.push(F("sitasi","error","Sitasi dalam kurung memakai \"dan\"","Di dalam kurung, dua penulis dihubungkan dengan \"&\".",{p:p.i,quote:m[0],fix:m[0].replace(/\s+dan\s+/," & ")}));
       if (/(dkk|et al)(?!\.)/.test(inner)) out.push(F("sitasi","error",`"${/dkk/.test(inner)?"dkk":"et al"}" tanpa titik`,"Singkatan ditulis dengan titik: dkk. / et al.",{p:p.i,quote:m[0],fix:m[0].replace(/(dkk|et al)(?!\.)/,"$1.")}));
       if (!art && /\d{4}\s+:\s*\d|\d{4}\s*:\s+\d/.test(inner)) out.push(F("sitasi","warning","Spasi di sekitar titik dua halaman","Tulis rapat: (Penulis, 2024:19) atau (Penulis, 2024, hlm. 19), konsisten di seluruh naskah.",{p:p.i,quote:m[0]}));
     }
   }
   const refs = parseRefs(M);
-  const refKeys = new Map(refs.map(r=>[r.key+"|"+r.year, r]));
-  const refByName = new Map(); refs.forEach(r=>{ if(!refByName.has(r.key)) refByName.set(r.key,[]); refByName.get(r.key).push(r); });
-  const seen = new Set(); const cited = new Set();
+  const seen = new Set(); const citedRefs = new Set();
   for (const c of cites){
-    const y = parseInt(c.year,10); const k = c.key+"|"+y;
-    if (refKeys.has(k)){ cited.add(k); continue; }
-    const byName = refByName.get(c.key);
-    if (seen.has(k)) continue; seen.add(k);
-    if (byName){ byName.forEach(r=>cited.add(r.key+"|"+r.year)); out.push(F("sitasi","error",`Tahun ${c.who} (${c.year}) tidak cocok dengan daftar pustaka`,`Daftar pustaka mencantumkan ${byName.map(r=>r.surname+" ("+r.year+")").join(", ")}.`,{p:c.p.i,quote:c.raw})); }
-    else if (refs.length) out.push(F("sitasi","error",`${c.who} (${c.year}) tidak ada di daftar ${art?"rujukan":"pustaka"}`,"Setiap sumber yang dikutip wajib dicantumkan.",{p:c.p.i,quote:c.raw,fix:`Tambahkan entri ${c.who} (${c.year}).`}));
+    const r = citeMatch(c, refs); c.matched = !!r.hit;
+    if (r.hit){ citedRefs.add(r.hit); continue; }
+    const k = fold(c.who)+"|"+yearKey(c.year); if (seen.has(k)) continue; seen.add(k);
+    if (!refs.length) continue;
+    if (r.sameName.length){ r.sameName.forEach(x=>citedRefs.add(x)); out.push(F("sitasi","error",`Tahun ${c.who} (${c.year}) tidak cocok dengan daftar ${art?"rujukan":"pustaka"}`,`Daftar ${art?"rujukan":"pustaka"} mencantumkan ${r.sameName.map(x=>x.surname+" ("+(x.year??"t.t.")+")").join(", ")}.`,{p:c.p.i,quote:c.raw})); }
+    else out.push(F("sitasi","error",`${c.who} (${c.year}) tidak ada di daftar ${art?"rujukan":"pustaka"}`,"Setiap sumber yang dikutip wajib dicantumkan.",{p:c.p.i,quote:c.raw,fix:`Tambahkan entri ${c.who} (${c.year}).`}));
   }
-  refs.forEach(r=>{ if(!cited.has(r.key+"|"+r.year)) out.push(F("sitasi","warning",`${r.surname} (${r.year ?? "t.t."}) tidak pernah dikutip`,"Daftar pustaka hanya memuat sumber yang dikutip dalam naskah.",{p:r.p.i,quote:r.text.slice(0,50)})); });
+  refs.forEach(r=>{ if(!citedRefs.has(r)) out.push(F("sitasi","warning",`${r.surname} (${r.year ?? "t.t."}) tidak pernah dikutip`,"Daftar pustaka hanya memuat sumber yang dikutip dalam naskah.",{p:r.p.i,quote:r.text.slice(0,50)})); });
   const nowY = new Date().getFullYear();
-  const stats = {count:refs.length, recent:refs.filter(r=>r.year && r.year>=nowY-10).length, journal:refs.filter(r=>r.journal).length, doi:refs.filter(r=>r.doi).length, cites:cites.length, matched:cites.filter(c=>refKeys.has(c.key+"|"+parseInt(c.year,10))).length, sinceYear:nowY-10, min: art?15:0};
+  const stats = {count:refs.length, recent:refs.filter(r=>r.year && r.year>=nowY-10).length, journal:refs.filter(r=>r.journal).length, doi:refs.filter(r=>r.doi).length, cites:cites.length, matched:cites.filter(c=>c.matched).length, sinceYear:nowY-10, min: art?15:0};
   if (refs.length){
     const pr = pct(stats.recent,refs.length), pj = pct(stats.journal,refs.length);
     const old = refs.filter(r=>r.year && r.year<nowY-10);
@@ -1514,7 +1585,7 @@ function checkCitations(M){
   if (art) out.push(...checkAPA7(M, refs, body));
   if (!refs.length && cites.length) out.push(F("sitasi","error","Entri daftar pustaka tidak terbaca","Pastikan setiap entri berada di bawah judul daftar pustaka/rujukan, satu entri per paragraf, dan memuat tahun."));
   if (!out.some(f=>f.sev==="error")) out.unshift(F("sitasi","ok","Format sitasi dan daftar pustaka sesuai",`${stats.cites} sitasi terbaca, ${stats.matched} cocok dengan daftar pustaka.`));
-  return {out, stats, refs, cites:cites.map(c=>({who:c.who, year:c.year, raw:c.raw, key:c.key, p:c.p.i, bab:c.p.bab||"", matched:refKeys.has(c.key+"|"+parseInt(c.year,10))}))};
+  return {out, stats, refs, cites:cites.map(c=>({who:c.who, year:c.year, raw:c.raw, key:fold((citeAuthors(c.who)[0]||c.who).split(/\s+/).pop()), p:c.p.i, bab:c.p.bab||"", matched:!!c.matched}))};
 }
 
 /* ═════════════ CHECKS: tabel & gambar ═════════════ */
@@ -1668,7 +1739,7 @@ function checkAPA7(M, refs, body){
     const authorSeg = ym ? t.slice(0, ym.index) : (t.match(/^[^.]+\.[^.]*\./)||[t])[0];
     if (!ym){ if (/\b(19|20)\d{2}\b/.test(t)) add("r-year", ()=>({cat:"sitasi",sev:"error",title:"Tahun tidak ditulis dalam kurung",detail:"Format: Penulis, A. A. (2020). Judul ...",apa:"9.14"}), p, (t.match(/\b(19|20)\d{2}\b/)||[""])[0]); }
     else if (t[ym.index+ym[0].length]!=="."){ add("r-yeardot", ()=>({cat:"sitasi",sev:"error",title:"Tidak ada titik setelah (Tahun)",detail:"Tanggal diakhiri titik: (2020).",apa:"9.14"}), p, ym[0]); }
-    if (/\s(dan|and)\s/i.test(authorSeg)) add("r-and", ()=>({cat:"sitasi",sev:"error",title:"Penulis dihubungkan dengan \"dan\"/\"and\"",detail:"Di daftar rujukan gunakan ampersand (&) sebelum penulis terakhir: Author, A. A., & Author, B. B.",apa:"9.8"}), p, (authorSeg.match(/\s(dan|and)\s/i)||[""])[0].trim());
+    if (/\s(dan|and)\s/i.test(authorSeg) && /\b[A-Z]\.\s/.test(authorSeg)) add("r-and", ()=>({cat:"sitasi",sev:"error",title:"Penulis dihubungkan dengan \"dan\"/\"and\"",detail:"Di daftar rujukan gunakan ampersand (&) sebelum penulis terakhir: Author, A. A., & Author, B. B.",apa:"9.8"}), p, (authorSeg.match(/\s(dan|and)\s/i)||[""])[0].trim());
     if (/[A-Z]\.\s*&/.test(authorSeg) && !/,\s*&/.test(authorSeg)) add("r-serial", ()=>({cat:"sitasi",sev:"error",title:"Tidak ada koma sebelum \"&\"",detail:"Gunakan koma sebelum & meskipun hanya dua penulis: Salas, A., & D’Agostino, B.",apa:"9.8"}), p, (authorSeg.match(/[A-Z]\.\s*&/)||[""])[0]);
     if (/\bet al\b|\bdkk\b/i.test(authorSeg)) add("r-etal", ()=>({cat:"sitasi",sev:"error",title:"\"et al.\"/\"dkk.\" di daftar rujukan",detail:"Tulis nama semua penulis hingga 20 orang di daftar rujukan.",apa:"9.8"}), p, (authorSeg.match(/\bet al\.?|\bdkk\.?/i)||[""])[0]);
     if (GELAR.test(authorSeg)) add("r-gelar", ()=>({cat:"sitasi",sev:"error",title:"Gelar akademik pada nama penulis",detail:"Jangan cantumkan gelar, jabatan, atau pangkat pada nama penulis.",apa:"9.8"}), p, (authorSeg.match(GELAR)||[""])[0].replace(/^[\s,]+/,""));
