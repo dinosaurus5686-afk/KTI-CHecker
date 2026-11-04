@@ -4930,6 +4930,7 @@ function applyWork(rec, meta){
     S.doc._key = rec.key; if (!(S.excl instanceof Set)) S.excl = new Set(S.excl||[]);
     try{ $("#selJenis").value=S.jenis; $("#selTahap").value=S.tahap; }catch(_){}
     S.savedAt = meta ? meta.savedAt : Date.now();
+    S._modeFixed = fixDocMode();
   } finally { S._restoring=false; }
 }
 async function workFind(doc){ const key=docKey(doc); doc._key=key; const rec = await workLoad(key); if (!rec) return null; const meta = (S.works||[]).find(m=>m.key===key) || null; return {rec, meta}; }
@@ -5443,6 +5444,7 @@ function setDoc(doc){
 }
 async function startAnalysis(){
   if (!S.doc || S.running) return;
+  if (fixDocMode()) toast("Naskah dikenali sebagai Artikel jurnal (tanpa BAB, memiliki abstrak/bagian artikel).");
   const box=$("#withAI"); if (box) S.withAI = box.checked;
   S.running=true; invalidate(); if (S.view==="unggah"||S.view==="chat") S.view="overview";
   render();
@@ -5521,7 +5523,7 @@ async function handleFile(f, opt={}){
     setDoc({name, ...r});
     guessProfile();
     const found = await workFind(S.doc).catch(()=>null);
-    if (found){ applyWork(found.rec, found.meta); if (!opt.final || (S.ce && S.ce.E)){ if (opt.final){ S.finalMode=true; S.tahap="Artikel"; } toast("Naskah ini pernah dikerjakan; semua hasil sebelumnya dipulihkan."); const v = opt.final ? "copyedit" : (found.meta && found.meta.view && viewMeta(found.meta.view) && found.meta.view!=="unggah" ? found.meta.view : "overview"); return go(v); } }
+    if (found){ applyWork(found.rec, found.meta); if (!opt.final || (S.ce && S.ce.E)){ if (opt.final){ S.finalMode=true; S.tahap="Artikel"; } toast("Naskah ini pernah dikerjakan; semua hasil sebelumnya dipulihkan."); if (S._modeFixed){ S._modeFixed=false; setTimeout(()=>startAnalysis(),300); } const v = opt.final ? "copyedit" : (found.meta && found.meta.view && viewMeta(found.meta.view) && found.meta.view!=="unggah" ? found.meta.view : "overview"); return go(v); } }
     if (opt.final){
       S.tahap="Artikel"; $("#selTahap").value="Artikel"; S.finalMode=true;
       const C=ceState(); C.src="upload"; C.edited=false;
@@ -5532,9 +5534,21 @@ async function handleFile(f, opt={}){
     go("overview");
   }catch(e){ console.error(e); S.fileBusy=false; if (opt.final){ S.ceUpErr = e.message || "Berkas gagal dibaca. Coba simpan ulang sebagai .docx."; S.view="copyedit"; return render(); } S.uploadErr = e.message || "Berkas gagal dibaca. Coba simpan ulang sebagai .docx."; S.view="unggah"; render(); }
 }
+// naskah tanpa BAB yang punya abstrak atau bagian-bagian artikel = artikel jurnal
+function looksLikeArticle(ps){
+  ps = ps||[]; if (ps.some(p=>/^BAB\s+([IVX]+|\d+)\b/i.test((p.text||"").trim()))) return false;
+  const hasAbs = ps.some(p=>/^(abstract|abstrak)\b/i.test((p.text||"").trim()));
+  const secs = new Set(ps.filter(p=>(p.text||"").trim().length<70).map(p=>((p.text||"").trim().replace(/^[\dIVX]+[.)]?\s*/i,"").match(/^(pendahuluan|introduction|metode|metodologi|methods?|hasil|results?|pembahasan|discussion|kesimpulan|simpulan|conclusions?|daftar rujukan|daftar pustaka|references)\b/i)||[])[1]).filter(Boolean).map(s=>s.toLowerCase()));
+  return hasAbs || secs.size>=3;
+}
+function fixDocMode(){
+  if (!S.doc || S.doc.source==="contoh" || S.tahap==="Artikel" || !looksLikeArticle(S.doc.paras)) return false;
+  S.tahap="Artikel"; try{ $("#selTahap").value="Artikel"; }catch(_){}
+  if (S.ai && S.ai.mode!=="review") S.ai=null; S.local=null; return true;
+}
 function guessProfile(){
   const ps = S.doc.paras; const t = ps.slice(0,400).map(p=>p.text).join(" ").toLowerCase();
-  const art = !ps.some(p=>/^BAB\s+(I|1)\b/i.test(p.text)) && ps.some(p=>/^abstract\b/i.test(p.text.trim())) && ps.some(p=>/^(metode|method)/i.test(p.text.trim()));
+  const art = looksLikeArticle(ps);
   let j = S.jenis;
   if (/penelitian tindakan kelas|\bptk\b|siklus i/.test(t)) j="PTK";
   else if (/research and development|\br\s*&\s*d\b|pengembangan produk|model addie|4-d|validasi produk/.test(t)) j="Pengembangan";
@@ -5807,6 +5821,7 @@ document.addEventListener("click", e=>{ const a=e.target.closest && e.target.clo
   setDoc(JSON.parse(JSON.stringify(SAMPLE_KTI)));
   await analyzeLocal(false);
   try{ const w = await workList(); if (w.length){ const rec = await workLoad(w[0].key); if (rec) applyWork(rec, w[0]); } }catch(e){ console.warn("pulihkan:", e); }
+  if (S._modeFixed){ S._modeFixed=false; setTimeout(()=>{ toast("Naskah dikenali sebagai Artikel jurnal; analisis diperbarui agar Review reviewer tersedia."); startAnalysis(); }, 300); }
   try{ const v=localStorage.getItem("kti.view"); if(v && viewMeta(v) && !["chat","unggah"].includes(v)) S.view=v; }catch(e){}
   render();
   const c = window.claude;
