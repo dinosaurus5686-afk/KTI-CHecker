@@ -5310,9 +5310,10 @@ function vFormat(){
 function vAI(){
   if (isArt()) return vReview();
   const ai=S.ai;
+  const modeNote = `<div class="notice" style="margin-bottom:16px;align-items:center">${icon(IC.info)}<div style="flex:1"><b>Review reviewer (1–3 reviewer, instruksi khusus, gaya reviewer, dan balon komentar per reviewer) hanya tersedia untuk Artikel jurnal.</b> Dokumen yang dipilih sekarang: <b>${esc(S.tahap==="Skripsi"?"Skripsi":"Proposal skripsi")}</b>, sehingga yang tampil adalah tinjauan skripsi.</div><button class="btn primary sm" data-act="toartikel">Ubah ke Artikel jurnal</button></div>`;
   const modes = `<div class="seg" role="group" aria-label="Kedalaman tinjauan"><button aria-pressed="${S.aiMode==="teliti"}" data-mode="teliti">Teliti</button><button aria-pressed="${S.aiMode==="cepat"}" data-mode="cepat">Cepat</button></div>`;
   const len = S.doc.paras.reduce((a,p)=>a+p.text.length,0);
-  const head = `<div class="card"><h3>Tinjauan substansi oleh Claude<span class="r">${len>AI_LIMIT?`${Math.round(AI_LIMIT/1000)} rb dari ${Math.round(len/1000)} rb karakter dikirim`:`${Math.round(len/1000)||1} rb karakter`}</span></h3>
+  const head = modeNote + `<div class="card"><h3>Tinjauan substansi oleh Claude<span class="r">${len>AI_LIMIT?`${Math.round(AI_LIMIT/1000)} rb dari ${Math.round(len/1000)} rb karakter dikirim`:`${Math.round(len/1000)||1} rb karakter`}</span></h3>
     <div class="toolbar" style="margin-bottom:0">${modes}
     ${S.aiBusy?`<button class="btn sm" data-act="stop">Hentikan</button>`:`<button class="btn primary sm" data-act="ai">${ai?"Tinjau ulang":"Mulai tinjauan"}</button>`}
     <span class="small muted">${S.aiMode==="teliti"?"Model paling teliti; biasanya 1–3 menit.":"Lebih cepat, analisis lebih ringkas."} Memakai kuota akun Claude Anda.</span></div>${S.aiBusy?"":vAIScope()}
@@ -5688,6 +5689,7 @@ document.addEventListener("click", e=>{
   if (b.dataset.workopen!=null){ if (S.doc && S.doc._key===b.dataset.workopen) return go("overview"); return workOpen(b.dataset.workopen); }
   if (b.dataset.workdel!=null){ const k=b.dataset.workdel; if (S.workDelArm!==k){ S.workDelArm=k; b.textContent = k ? "Ketuk lagi untuk menghapus" : "Ketuk lagi untuk menghapus semua"; setTimeout(()=>{ if (S.workDelArm===k){ S.workDelArm=null; render(); } }, 4000); return; } S.workDelArm=null; toast(k?"Naskah dihapus dari perangkat.":"Semua naskah tersimpan dihapus."); return workDelete(k); }
   if (b.dataset.act==="norzip") return norZip();
+  if (b.dataset.act==="toartikel"){ S.tahap="Artikel"; $("#selTahap").value="Artikel"; profileChanged(); if (S.doc && !S.running) startAnalysis(); return; }
   if (b.dataset.norgo){ const [st,v]=b.dataset.norgo.split(":"); S.norStage=st; if (v==="ojs" && S.ce && S.ce.E) ojsState().src=S.ce.src; return go(v); }
   if (b.dataset.norstage){ S.norStage=b.dataset.norstage; return go("nor"); }
   if (b.dataset.view) return go(b.dataset.view);
