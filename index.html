@@ -1251,8 +1251,8 @@ function checkAbstract(M){
 }
 function abstractParts(text, parts, lang){
   const cues = lang==="en"
-    ? {"Background":/(problem|issue|lack|low|increasing|growing|phenomen|important|necessary)/i,"Aim":/(aims?|purpose|objective|to (analy|examin|determin|investigat|describ))/i,"Method":/(method|approach|design|sample|respondents|participants|data were|questionnaire|analy[sz]ed|regression)/i,"Results":/(result|show(ed|s)|found|indicat|reveal)/i,"Conclusion":/(conclu|suggest|implicat|therefore|recommend)/i}
-    : {"Latar belakang":/(dilatarbelakangi|latar belakang|permasalahan|rendahnya|kurangnya|belum optimal|fenomena|meningkatnya|perkembangan)/i,"Tujuan":/(tujuan|bertujuan)/i,"Metode":/(metode|pendekatan|jenis penelitian|desain|subjek|sampel|teknik analisis|dianalisis|di analisis|dianalisa)/i,"Hasil":/(hasil penelitian|menunjukkan|diperoleh|meningkat dari|hasil yang)/i,"Simpulan":/(simpulan|disimpulkan|kesimpulan|dapat meningkatkan|efektif|implikasi)/i};
+    ? {"Background":/(problem|issue|lack|low|poor|increasing|growing|phenomen|important|importance|necessary|challeng|concern|crucial|essential|need|gap|limited|remain|despite|however|prevalen|rapid|era\b|recent)/i,"Aim":/(aims?\b|aimed|purpose|objective|goal|this (study|research|paper|article) (analy|examin|investigat|explor|describ|determin|assess|evaluat|identif|seek|attempt|test)|(was|is) conducted to|to (analy|examin|determin|investigat|describ|explor|identif|assess|evaluat|measure|test|develop|improve))/i,"Method":/(method|approach|design|sample|respondent|participant|data were|data was|questionnaire|interview|observation|documentation|qualitative|quantitative|mixed|survey|experiment|case study|purposive|random|population|subjects|instrument|descriptive|t-test|anova|regression|correlation|classroom action research|literature review|systematic|analy[sz]ed)/i,"Results":/(result|show(ed|s)?\b|found|indicat|reveal|demonstrat|significant|there (is|was|were) a|increase|improv|obtained|effect)/i,"Conclusion":/(conclu|suggest|implicat|therefore|thus|hence|recommend|can be used|effective|contribut)/i}
+    : {"Latar belakang":/(dilatarbelakangi|latar belakang|permasalahan|masalah|rendahnya|kurangnya|belum optimal|masih rendah|fenomena|meningkatnya|perkembangan|tantangan|pentingnya|kebutuhan|kesenjangan|seiring|era\b|dewasa ini|saat ini)/i,"Tujuan":/(tujuan|bertujuan|untuk (menganalisis|mengetahui|mendeskripsikan|menguji|mengkaji|mengidentifikasi|meningkatkan|menjelaskan|mengeksplorasi|mengembangkan)|penelitian ini (menganalisis|mengkaji|menguji|mendeskripsikan|mengidentifikasi|menerapkan|mengeksplorasi|mengembangkan)|dilakukan untuk)/i,"Metode":/(metode|pendekatan|jenis penelitian|desain|subjek|sampel|teknik analisis|dianalisis|di analisis|dianalisa|kualitatif|kuantitatif|survei|eksperimen|studi kasus|wawancara|observasi|dokumentasi|angket|kuesioner|populasi|purposive|instrumen|tindakan kelas|\bPTK\b|deskriptif|uji t|regresi|korelasi|studi pustaka|tinjauan literatur|\bR&D\b|pengembangan|ADDIE)/i,"Hasil":/(hasil (penelitian|analisis|uji)|menunjukkan|ditemukan|diperoleh|terbukti|berpengaruh|signifikan|terdapat (pengaruh|hubungan|perbedaan|peningkatan)|meningkat|mengungkap)/i,"Simpulan":/(simpulan|disimpulkan|kesimpulan|dengan demikian|oleh karena itu|implikasi|direkomendasikan|disarankan|efektif|dapat (meningkatkan|digunakan|dijadikan|menjadi)|berkontribusi)/i};
   const miss = Object.keys(cues).filter(k=>!cues[k].test(text));
   Object.keys(cues).forEach(k=>parts[k]=!miss.includes(k));
   return miss;
@@ -1275,10 +1275,12 @@ function checkArticle(M){
   const info = {title:null, authors:0, emails:0, abs:{}, sections:[]};
   if (title){
     const wc = words(title.text).length; info.title={wc};
+    if (/[a-z]/.test(title.text) && !isUpperish(title.text)) A_.push(F("abstrak","error","Judul belum huruf kapital semua","Template Nusantara of Research: judul artikel ditulis dengan HURUF KAPITAL, tebal, rata tengah.",{p:title.i,quote:title.text.split(" ").slice(0,6).join(" "),fix:title.text.toUpperCase()}));
     A_.push(F("abstrak", wc<=14?"ok":"error", `Judul ${wc} kata`, wc<=14?"Tidak melebihi 14 kata.":"Template membatasi judul maksimal 14 kata.",{p:title.i, quote:title.text.split(" ").slice(14).join(" ")||undefined, fix: wc>14?"Padatkan judul; hapus kata yang tidak esensial (misalnya keterangan lokasi yang panjang).":undefined}));
     if (title.f){
       const fi = fontIssue(title,14,"Judul"); if (fi) Fm.push(fi);
-      if (title.al && title.al!=="center") Fm.push(F("format","error","Judul tidak rata tengah",`Terbaca rata ${title.al==="both"?"kiri-kanan":title.al}. Template: rata tengah.`,{p:title.i}));
+      const tal = title.al;
+      if (tal && tal!=="center") Fm.push(F("format","error","Judul tidak rata tengah",`Terbaca rata ${tal==="both"?"kiri-kanan":tal==="left"?"kiri":tal}. Template: rata tengah.`,{p:title.i}));
       if (title.ln && title.ln>1.1) Fm.push(F("format","error",`Spasi judul ${String(title.ln).replace(".",",")}`,"Template: spasi 1.",{p:title.i}));
     }
   } else A_.push(F("abstrak","error","Judul artikel tidak terbaca","Baris pertama artikel seharusnya judul."));
@@ -1311,13 +1313,13 @@ function checkArticle(M){
     if (a.body.length>1) A_.push(F("abstrak","error",`${label} lebih dari satu paragraf (${a.body.length})`,"Template: abstrak ditulis dalam satu paragraf.",{p:a.body[1].i}));
     const c = countCites(a.text); if (c) A_.push(F("abstrak","error",`${label} memuat kutipan pustaka`,"Template: abstrak tidak menuliskan kutipan pustaka.",{p:p0.i,quote:(a.text.match(CITE_ANY)||[""])[0]}));
     const miss = abstractParts(a.text, parts, lang);
-    if (miss.length) A_.push(F("abstrak", miss.length>1?"error":"warning", `Unsur ${label} belum lengkap: ${miss.join(", ")}`, "Abstrak berisi ringkasan latar belakang, tujuan, metode, hasil, serta kesimpulan.",{p:p0.i}));
+    if (miss.length) A_.push(F("abstrak", miss.length>=3?"error":"warning", `Unsur ${label} belum lengkap: ${miss.join(", ")}`, "Abstrak berisi ringkasan latar belakang, tujuan, metode, hasil, serta kesimpulan.",{p:p0.i}));
     if (lang==="en"){ const idw=(a.text.match(/\b(yang|dan|dengan|untuk|pada|ini|adalah|dalam)\b/gi)||[]).length; if (wc && idw/wc>0.03) A_.push(F("abstrak","error","ABSTRACT tidak berbahasa Inggris","Bagian ABSTRACT wajib ditulis dalam Bahasa Inggris.",{p:p0.i})); }
     a.body.forEach(p=>{ const fi=fontIssue(p,11,label); if(fi){ Fm.push(fi); } });
     if (a.kw==null) A_.push(F("abstrak","error",`${kwLabel} tidak ditemukan`,`Tambahkan ${kwLabel} berisi 3–5 kata.`,{p:p0.i}));
     else {
       const items = a.kw.split(/[;,]/).map(s=>s.trim().replace(/\.$/,"")).filter(Boolean);
-      const upper = items.filter(s=>/[A-Z]/.test(s) && !/^[A-Z0-9\-]{2,6}$/.test(s));
+      const upper = items.filter(s=>s.split(/\s+/).some(w=>/^[A-Z][a-z]/.test(w)));
       A_.push(F("abstrak", items.length>=3&&items.length<=5?"ok":"error", `${kwLabel}: ${items.length} kata`, items.length>=3&&items.length<=5?"Berada dalam rentang 3–5.":"Template: berjumlah 3–5.",{p:a.kwP.i}));
       if (upper.length) A_.push(F("abstrak","error",`${kwLabel} memakai huruf kapital`,"Template: kata kunci ditulis dengan huruf kecil.",{p:a.kwP.i,quote:upper[0],fix:items.map(s=>/^[A-Z0-9\-]{2,6}$/.test(s)?s:s.toLowerCase()).join("; ")}));
       const fi = fontIssue(a.kwP,10,kwLabel); if (fi) Fm.push(fi);
@@ -1353,7 +1355,7 @@ function checkArticle(M){
     if (lvl>1 && !isTitleCase(stripNum(p.text))) S_.push(F("struktur","warning",`Sub-bagian belum Huruf Besar di Awal Kata`,`Peringkat ${lvl}: Huruf Besar di Awal Kata, ${lvl===3?"tebal-miring":"tebal"}, rata kiri.`,{p:p.i,quote:p.text}));
     if (p.f){
       if (p.b===false || p.b===0) S_.push(F("struktur","error",`Judul "${stripNum(p.text)}" tidak dicetak tebal`,`Semua judul bagian dan sub-bagian dicetak tebal${lvl===3?" dan miring":""}.`,{p:p.i,quote:p.text}));
-      if (p.al && p.al!=="left") S_.push(F("struktur","warning",`Judul "${stripNum(p.text)}" tidak rata kiri`,"Template: judul bagian rata kiri.",{p:p.i}));
+      if (p.al && !["left","both","start","justify","distribute"].includes(p.al)) S_.push(F("struktur","warning",`Judul "${stripNum(p.text)}" tidak rata kiri`,"Template: judul bagian rata kiri.",{p:p.i}));
     }
   });
   // isi per bagian
@@ -1380,12 +1382,16 @@ function checkArticle(M){
   if (pem.length){ const c=pem.reduce((a,p)=>a+countCites(p.text),0); if (c<3) I_.push(F("isi","warning",`Pembahasan hanya memuat ${c} rujukan`,"Pembahasan mendiskusikan hasil dengan teori dan penelitian terdahulu secara komprehensif.",{p:pem[0].i})); }
   const kes = secBody("KESIMPULAN DAN SARAN");
   if (kes.length){
-    const num = kes.filter(p=>/\d/.test(p.text));
-    if (num.length) I_.push(F("isi","error","Kesimpulan mengandung angka","Template: kesimpulan dituliskan secara deskriptif dan tidak mengandung angka.",{p:num[0].i,occ:num.map(p=>({p:p.i,q:(p.text.match(/[\d,.%]+/)||[""])[0]})),quote:(num[0].text.match(/\d[\d,.]*\s?%?/)||[""])[0]}));
+    const noCite = s => String(s).replace(/\([^()]*\b(?:1[89]|20)\d{2}[a-z]?\b[^()]*\)/g," ").replace(/\bke-\d+\b/g," ").replace(/\b(abad|tahun|kelas|semester)\s+[\dIVX]+\b/gi," ");
+    const num = kes.filter(p=>/\d/.test(noCite(p.text)));
+    if (num.length) I_.push(F("isi","error","Kesimpulan mengandung angka","Template: kesimpulan dituliskan secara deskriptif dan tidak mengandung angka.",{p:num[0].i,occ:num.map(p=>({p:p.i,q:(noCite(p.text).match(/\d[\d,.]*\s?%?/)||[""])[0]})),quote:(noCite(num[0].text).match(/\d[\d,.]*\s?%?/)||[""])[0]}));
     if (kes.some(p=>countCites(p.text))) I_.push(F("isi","warning","Kesimpulan memuat kutipan","Kesimpulan menjawab rumusan masalah dari temuan sendiri.",{p:kes[0].i}));
     if (!kes.some(p=>/(saran|disarankan|sebaiknya|hendaknya|perlu)/i.test(p.text))) I_.push(F("isi","warning","Saran belum ditulis","Bagian ini berjudul KESIMPULAN DAN SARAN; tambahkan saran.",{p:kes[kes.length-1].i}));
   }
-  ART_SECTIONS.slice(0,5).forEach(s=>{ const b=secBody(s.key); if(found[s.key] && !found[s.key].combined && paraWords(b)<40) I_.push(F("isi","error",`Bagian ${s.key} hampir kosong`,`${paraWords(b)} kata. ${s.desc}`,{p:found[s.key].i})); });
+  ART_SECTIONS.slice(0,5).forEach(s=>{ const b=secBody(s.key); const n=paraWords(b); if(!found[s.key] || found[s.key].combined) return;
+    const minE = s.key==="KESIMPULAN DAN SARAN" ? 20 : 40, minW = s.key==="KESIMPULAN DAN SARAN" ? 40 : 80;
+    if (n<minE) I_.push(F("isi","error",`Bagian ${s.key} hampir kosong`,`${n} kata. ${s.desc}`,{p:found[s.key].i}));
+    else if (n<minW) I_.push(F("isi","warning",`Bagian ${s.key} sangat singkat`,`${n} kata. ${s.desc}`,{p:found[s.key].i})); });
   if (!I_.some(f=>f.sev!=="ok"&&f.sev!=="info")) I_.unshift(F("isi","ok","Isi setiap bagian sesuai ketentuan template","Pendahuluan, metode, hasil, pembahasan, dan kesimpulan memenuhi pemeriksaan dasar."));
   if (!S_.some(f=>f.sev==="error")) S_.unshift(F("struktur","ok","Bagian artikel lengkap dan berurutan",ART_SECTIONS.map(s=>s.key).join(" → ")));
   const total = ART_SECTIONS.length, fnd = ART_SECTIONS.filter(s=>found[s.key]&&!(s.key==="HASIL"&&found[s.key].combined)).length;
@@ -1410,11 +1416,12 @@ function checkLanguageID(M, hasEm, idSet){
     diVerb.lastIndex=0;
     while((m=diVerb.exec(t))){ const k=(m[1]+" "+m[2]).toLowerCase(); addOcc(agg,"dv:"+k,()=>({cat:"bahasa",sev:"error",title:`"${k}" → "di${m[2].toLowerCase()}"`,detail:"Awalan di- pada kata kerja pasif ditulis serangkai.",fix:`Tulis "di${m[2].toLowerCase()}".`,occ:[]}),p,m[0]); }
     diPlace.lastIndex=0;
-    while((m=diPlace.exec(t))){ const k=(m[1]+m[2]).toLowerCase(); addOcc(agg,"dp:"+k,()=>({cat:"bahasa",sev:"error",title:`"${k}" → "${m[1].toLowerCase()} ${m[2].toLowerCase()}"`,detail:"Kata depan di/ke yang menunjukkan tempat ditulis terpisah.",fix:`Tulis "${m[1].toLowerCase()} ${m[2].toLowerCase()}".`,occ:[]}),p,m[0]); }
+    while((m=diPlace.exec(t))){ const k=(m[1]+m[2]).toLowerCase();
+      if (k==="keluar" && !/^\s+negeri\b/i.test(t.slice(m.index+m[0].length))) continue; addOcc(agg,"dp:"+k,()=>({cat:"bahasa",sev:"error",title:`"${k}" → "${m[1].toLowerCase()} ${m[2].toLowerCase()}"`,detail:"Kata depan di/ke yang menunjukkan tempat ditulis terpisah.",fix:`Tulis "${m[1].toLowerCase()} ${m[2].toLowerCase()}".`,occ:[]}),p,m[0]); }
     let r=/\b(\w{3,})\s+\1\b/gi; while((m=r.exec(t))){ if(/^(\d+|sama|hati|kali|masing|berbagai|mula|baik)$/i.test(m[1]))continue; addOcc(agg,"rep:"+m[1].toLowerCase(),()=>({cat:"bahasa",sev:"warning",title:`Kata ganda "${m[0]}"`,detail:"Kata yang sama tertulis dua kali berturut-turut.",fix:`Hapus salah satu "${m[1]}".`,occ:[]}),p,m[0]); }
     r=/\s+([,.;:])(?=\s|$)/g; while((m=r.exec(t))){ addOcc(agg,"sp",()=>({cat:"bahasa",sev:"warning",title:"Spasi sebelum tanda baca",detail:"Tanda koma, titik, titik koma, dan titik dua ditulis rapat dengan kata sebelumnya.",occ:[]}),p,t.slice(Math.max(0,m.index-8),m.index+2).trim()); }
-    r=/[a-z][,;](?=[A-Za-z])/g; while((m=r.exec(t))){ addOcc(agg,"sp2",()=>({cat:"bahasa",sev:"warning",title:"Tidak ada spasi setelah koma",detail:"Beri satu spasi setelah koma dan titik koma.",occ:[]}),p,t.slice(Math.max(0,m.index-6),m.index+6)); }
-    if (!p.isHead){ r=/(^|[.!?]\s+)(\d+)\s+[a-zA-Z]/g; while((m=r.exec(t))){ addOcc(agg,"num",()=>({cat:"bahasa",sev:"warning",title:"Kalimat diawali angka",detail:"Angka di awal kalimat ditulis dengan huruf atau kalimat disusun ulang.",fix:"Contoh: \"Sebanyak 28 siswa ...\".",occ:[]}),p,m[2]); } }
+    r=/[a-z][,;](?=[A-Za-z])/g; while((m=r.exec(t))){ const tok=t.slice(0,m.index+1).split(/\s/).pop()+t.slice(m.index+1).split(/\s/)[0]; if (/(https?:|www\.|@|\/)/i.test(tok)) continue; addOcc(agg,"sp2",()=>({cat:"bahasa",sev:"warning",title:"Tidak ada spasi setelah koma",detail:"Beri satu spasi setelah koma dan titik koma.",occ:[]}),p,t.slice(Math.max(0,m.index-6),m.index+6)); }
+    if (!p.isHead){ r=/(^|[.!?]\s+)(\d+)\s+[a-zA-Z]/g; while((m=r.exec(t))){ if (m[1] && (ABBR_BEFORE.test(t.slice(0,m.index+1)) || /\b(No|Nomor|Pasal|Ayat|Bab|Tabel|Gambar|Hal|Kls|Thn|Jl|Rp|Pukul|Pkl)\.$/i.test(t.slice(0,m.index+1)))) continue; addOcc(agg,"num",()=>({cat:"bahasa",sev:"warning",title:"Kalimat diawali angka",detail:"Angka di awal kalimat ditulis dengan huruf atau kalimat disusun ulang.",fix:"Contoh: \"Sebanyak 28 siswa ...\".",occ:[]}),p,m[2]); } }
     r=/\bRp\.?\s+\d/g; while((m=r.exec(t))){ addOcc(agg,"rp",()=>({cat:"bahasa",sev:"warning",title:"Penulisan Rp berspasi",detail:"Lambang mata uang ditulis rapat tanpa titik: Rp5.000,00.",occ:[]}),p,m[0]); }
     r=/\d\s+%/g; while((m=r.exec(t))){ addOcc(agg,"pc",()=>({cat:"bahasa",sev:"warning",title:"Spasi sebelum %",detail:"Tanda persen ditulis rapat: 80%.",occ:[]}),p,m[0]); }
     if (hasEm && !p.isHead){
@@ -1592,8 +1599,9 @@ function checkCitations(M){
 function checkVisual(M){
   const out=[]; const ps=M.paras.filter(p=>!p.toc); const caps={Tabel:[],Gambar:[]}; const art=isArt();
   const isCap = (p,kind) => p && new RegExp("^"+kind+"\\s+\\d+(\\.\\d+)?","i").test(p.text);
+  const nb = (k,d) => { for (let j=k+d; j>=0 && j<ps.length; j+=d){ const q=ps[j]; if (q.tag==="table"||q.tag==="img"||String(q.text||"").trim()) return q; } return null; };
   ps.forEach((p,k)=>{
-    const prev = ps[k-1], next = ps[k+1];
+    const prev = nb(k,-1), next = nb(k,1);
     if (p.tag==="table"){
       if (isCap(prev,"Tabel")){ if(art && prev.al==="center") out.push(F("visual","error","Judul tabel rata tengah","Template: judul tabel ditulis di atas tabel, rata kiri.",{p:prev.i,quote:prev.text})); if(art && prev.sz && prev.sz!==10) out.push(F("visual","error",`Judul tabel ${prev.sz} pt`,"Template: Arial Narrow 10.",{p:prev.i})); }
       else if (isCap(next,"Tabel")) out.push(F("visual","error","Judul tabel berada di bawah tabel","Judul tabel ditulis di atas tabel.",{p:next.i,quote:next.text,fix:"Pindahkan baris \""+next.text+"\" ke atas tabel."}));
@@ -1613,6 +1621,20 @@ function checkVisual(M){
       if (m && p.text.length<160 && p.region!=="awal") caps[kind].push({p, a:+m[1], b:m[2]?+m[2]:null, dot:!!m[3], text:p.text});
     }
   });
+  // nomor ganda, urutan nomor sederhana, dan rujukan dalam teks
+  const isCapP = p => /^(tabel|gambar|grafik)\s+\d/i.test(p.text||"") && (p.text||"").length<160;
+  const prose = ps.filter(p=>p.tag!=="table" && !isCapP(p) && p.region!=="pustaka").map(p=>p.text||"").join(" \n ");
+  for (const kind of ["Tabel","Gambar"]){
+    const L = caps[kind]; const lab = c => c.b!=null ? `${c.a}.${c.b}` : `${c.a}`; const seen={};
+    L.forEach((c,i)=>{
+      const n=lab(c);
+      if (seen[n]) out.push(F("visual","error",`Nomor ${kind.toLowerCase()} ganda: ${kind} ${n}`,`Ada lebih dari satu ${kind.toLowerCase()} bernomor ${n}. Setiap ${kind.toLowerCase()} diberi nomor berbeda dan berurutan.`,{p:c.p.i,quote:`${kind} ${n}`}));
+      seen[n]=true;
+      if (c.b==null && c.a!==i+1 && !L.some((x,j)=>j<i && x.a===c.a)) out.push(F("visual","warning",`Penomoran ${kind.toLowerCase()} tidak urut`,`${kind} ke-${i+1} dalam naskah bernomor ${kind} ${c.a}. Nomori berurutan mulai dari ${kind} 1.`,{p:c.p.i,quote:`${kind} ${c.a}`,fix:`${kind} ${i+1}`}));
+      const ref = new RegExp(`\\b${kind}\\s+${n.replace(".","\\.")}(?![\\d.]\\d)`,"i");
+      if (!ref.test(prose)) out.push(F("visual","warning",`${kind} ${n} tidak dirujuk dalam teks`,`Sebutkan ${kind.toLowerCase()} di paragraf sebelum ${kind.toLowerCase()} muncul, misalnya "... disajikan pada ${kind} ${n}."`,{p:c.p.i,quote:`${kind} ${n}`}));
+    });
+  }
   for (const kind of ["Tabel","Gambar"]){
     const L = caps[kind]; const cnt={};
     L.forEach(c=>{
@@ -3115,7 +3137,7 @@ function checkLanguageEN(M, paras){
     r=/\b(an)\s+([bcdfgjklmnpqrstvwxyz][a-z]+)/gi; while((m=r.exec(t))){ const w=m[2].toLowerCase(); if (/^(hour|honest|honou?r|heir)/.test(w)) continue; addOcc(agg,"en:a",()=>({cat:"bahasa",lang:"en",sev:"warning",title:"\"an\" sebelum bunyi konsonan",detail:"Gunakan \"a\" sebelum kata yang diawali bunyi konsonan.",fix:`Contoh: "a ${w}".`,occ:[]}),p,m[0]); }
     EN_CONTR.lastIndex=0; while((m=EN_CONTR.exec(t))){ addOcc(agg,"en:contr",()=>({cat:"bahasa",lang:"en",sev:"warning",title:"Kontraksi dalam tulisan akademik",detail:"Tulisan ilmiah berbahasa Inggris tidak memakai bentuk singkat seperti don't, it's, can't.",fix:"Tulis lengkap: do not, it is, cannot.",occ:[]}),p,m[0]); }
     r=/\b(e\.g|i\.e)\.(?!,)/g; while((m=r.exec(t))){ addOcc(agg,"en:eg",()=>({cat:"bahasa",lang:"en",sev:"warning",title:`Koma setelah "${m[1]}."`,detail:"Dalam gaya APA, e.g. dan i.e. selalu diikuti koma.",fix:`Tulis "${m[1]}.,".`,occ:[]}),p,m[0]); }
-    if (!p.isHead){ r=/(^|[.!?]\s+)(\d+)\s+[a-zA-Z]/g; while((m=r.exec(t))){ addOcc(agg,"en:num",()=>({cat:"bahasa",lang:"en",sev:"warning",title:"Sentence begins with a numeral",detail:"Angka di awal kalimat bahasa Inggris ditulis dengan huruf, atau kalimat disusun ulang.",fix:"Contoh: \"Twenty-eight students ...\".",occ:[]}),p,m[2]); } }
+    if (!p.isHead){ r=/(^|[.!?]\s+)(\d+)\s+[a-zA-Z]/g; while((m=r.exec(t))){ if (m[1] && ABBR_BEFORE.test(t.slice(0,m.index+1))) continue; addOcc(agg,"en:num",()=>({cat:"bahasa",lang:"en",sev:"warning",title:"Sentence begins with a numeral",detail:"Angka di awal kalimat bahasa Inggris ditulis dengan huruf, atau kalimat disusun ulang.",fix:"Contoh: \"Twenty-eight students ...\".",occ:[]}),p,m[2]); } }
     const tl=t.toLowerCase();
     EN_VARIANTS.forEach(([us,uk])=>{ if (new RegExp("\\b"+us+"\\b").test(tl)) (seen[us]=seen[us]||[]).push(p); if (new RegExp("\\b"+uk+"\\b").test(tl)) (seen[uk]=seen[uk]||[]).push(p); });
     for (const s of t.split(/(?<=[.!?])\s+/)){ if(words(s).length>40) addOcc(agg,"en:long",()=>({cat:"bahasa",lang:"en",sev:"info",title:"Very long sentence",detail:"Kalimat bahasa Inggris lebih dari 40 kata sulit diikuti. Pecah menjadi dua kalimat.",occ:[]}),p,s.split(" ").slice(0,8).join(" ")); }
@@ -3132,7 +3154,8 @@ function checkPunctGeneric(M, paras){
     r=/\(\s+|\s+\)/g; while((m=r.exec(t))){ addOcc(agg,"g:par",()=>({cat:"bahasa",lang:L,sev:"warning",title:"Spasi di dalam tanda kurung",detail:"Tanda kurung ditulis rapat dengan teks di dalamnya: (contoh), bukan ( contoh ).",occ:[]}),p,t.slice(Math.max(0,m.index-6),m.index+8).trim()); }
     r=/[a-z]{2,}[.!?](?=[A-Z][a-z])/g; while((m=r.exec(t))){ const pre=t.slice(Math.max(0,m.index-12), m.index+m[0].length); if (/(https?:|www\.|doi|\.[a-z]{2,3}\/)/i.test(t.slice(Math.max(0,m.index-30), m.index+10))) continue; addOcc(agg,"g:sp",()=>({cat:"bahasa",lang:L,sev:"warning",title:"Tidak ada spasi setelah titik",detail:"Beri satu spasi setelah tanda akhir kalimat.",occ:[]}),p,pre.trim().split(/\s/).pop()+t.slice(m.index+m[0].length).split(/\s/)[0]); }
     r=/([.!?])\s+([a-z][a-z]*)\b/g; while((m=r.exec(t))){ const before=t.slice(0,m.index+1); if (ABBR_BEFORE.test(before) || /\d\.$/.test(before) || /(https?:|www\.)\S*$/.test(before)) continue; addOcc(agg,"g:cap:"+L,()=>({cat:"bahasa",lang:L,sev:"warning",title:L==="en"?"Sentence starts with a lowercase letter":"Awal kalimat tidak memakai huruf kapital",detail:"Huruf pertama kalimat ditulis dengan huruf kapital.",occ:[]}),p,m[0].trim()); }
-    const open=(t.match(/\(/g)||[]).length, close=(t.match(/\)/g)||[]).length;
+    const tb=t.replace(/(^|[\s(;:,])(?:[a-zA-Z]|\d{1,2}|[ivxIVX]{1,4}|\*{1,3})\)(?=\s|$)/g,"$1");
+    const open=(tb.match(/\(/g)||[]).length, close=(tb.match(/\)/g)||[]).length;
     if (open!==close && !p.isHead) addOcc(agg,"g:bal",()=>({cat:"bahasa",lang:L,sev:"warning",title:"Tanda kurung tidak berpasangan",detail:"Jumlah kurung buka dan kurung tutup dalam paragraf tidak sama.",occ:[]}),p,t.slice(0,40));
     const q=(t.match(/"/g)||[]).length; if (q%2===1) addOcc(agg,"g:quo",()=>({cat:"bahasa",lang:L,sev:"warning",title:"Tanda petik tidak berpasangan",detail:"Ada tanda petik pembuka atau penutup yang hilang.",occ:[]}),p,t.slice(0,40));
     for (const w of t.match(/\b[a-z]{3,}-[a-z]{3,}\b/gi)||[]){ const k=w.toLowerCase(); (terms[k]=terms[k]||{p,w}); }
@@ -3146,7 +3169,9 @@ function checkPunctGeneric(M, paras){
   return Object.values(agg);
 }
 function checkLanguage(M, hasEm){
-  const body = M.paras.filter(p=>p.region!=="pustaka" && p.tag!=="table" && p.text && !p.toc && !/^(cara\s+mengutip|how\s+to\s+cite)/i.test(p.text));
+  const absI = M.paras.findIndex(p=>/^(abstract|abstrak)\b/i.test((p.text||"").trim()) && (p.text||"").trim().length<40);
+  const identity = p => isArt() && p.region==="awal" && absI>=0 && p.i<M.paras[absI].i;
+  const body = M.paras.filter(p=>p.region!=="pustaka" && p.tag!=="table" && p.text && !p.toc && !identity(p) && !/^(cara\s+mengutip|how\s+to\s+cite)/i.test(p.text));
   const mode = langMode();
   body.forEach(p=>{ p.lang = p.isHead && p.text.length<60 ? null : detectLang(p.text, mode); });
   /* judul pendek mengikuti paragraf sesudahnya; blok ABSTRACT dianggap Inggris */
@@ -3681,15 +3706,32 @@ function vSimilarity(){
 }
 
 /* ═════════════ CEK PENGGUNAAN AI (indikatif) ═════════════ */
-const AI_PHRASES = ["delve","delves","delving","tapestry","in today's","rapidly evolving","ever-evolving","it is important to note","it is worth noting","plays a crucial role","plays a pivotal role","pivotal","underscore","underscores","navigate the","navigating the","landscape of","in the realm of","a testament to","multifaceted","holistic approach","seamless","foster","fostering","furthermore,","moreover,","in conclusion,","overall,","additionally,","comprehensive understanding","shed light","sheds light","harness","leverage","robust","nuanced",
-  "di era digital saat ini","dalam era","memainkan peran penting","memainkan peran yang sangat penting","peran krusial","penting untuk dicatat","perlu dicatat bahwa","tidak dapat dipungkiri","secara keseluruhan","lebih lanjut,","selain itu,","dengan demikian,","oleh karena itu,","hal ini menunjukkan","dalam konteks ini","secara komprehensif","secara signifikan","berbagai aspek","aspek yang krusial","landasan yang kuat","menjadi kunci","sangat krusial","dinamika","holistik"];
+// Frasa yang jarang dipakai penulis manusia dalam tulisan ilmiah tetapi sering muncul pada teks AI generatif.
+const AI_PHRASES = ["delve","delves","delving","tapestry","in today's","rapidly evolving","ever-evolving","ever-changing","it is important to note","it is worth noting","it's important to note","plays a crucial role","plays a pivotal role","pivotal role","underscores the","underscore the","navigate the complexities","navigating the complexities","landscape of","in the realm of","a testament to","multifaceted","holistic approach","seamlessly","foster a","fostering a","shed light on","sheds light on","paving the way","a myriad of","not merely","endeavor","embark on","harness the power","unlock the potential","in an era of",
+  "di era digital saat ini","di era globalisasi saat ini","memainkan peran yang sangat penting","memainkan peran penting","memegang peranan yang sangat penting","peran yang krusial","peran krusial","aspek yang krusial","sangat krusial","penting untuk dicatat","perlu dicatat bahwa","penting untuk dipahami bahwa","tidak dapat dipungkiri","tak dapat dipungkiri","landasan yang kuat","landasan yang kokoh","menjadi kunci","kunci utama","lanskap","menavigasi","secara holistik","pendekatan holistik","berkelanjutan dan holistik","tidak hanya sekadar","bukan sekadar","merupakan cerminan","menjadi cerminan","membuka jalan","seiring dengan pesatnya","semakin kompleks","era yang semakin","dunia yang terus berubah"];
+// Kata penghubung yang wajar dalam tulisan ilmiah; baru dianggap tanda bila sangat padat.
+const AI_CONNECT = /(^|[.!?]\s+)(selain itu|oleh karena itu|dengan demikian|lebih lanjut|di sisi lain|secara keseluruhan|pada akhirnya|furthermore|moreover|additionally|in addition|overall|ultimately|in conclusion|consequently|therefore)\b/gi;
 function aiSignals(t){
   const tl=t.toLowerCase(); const w=words(t); const nw=w.length||1;
-  const hits = AI_PHRASES.filter(ph=>tl.includes(ph)); const per100 = hits.length/nw*100;
-  const sl = t.split(/(?<=[.!?])\s+/).map(s=>words(s).length).filter(x=>x>2); const mean=sl.reduce((a,b)=>a+b,0)/(sl.length||1); const sd=Math.sqrt(sl.reduce((a,b)=>a+(b-mean)**2,0)/(sl.length||1)); const cv = sl.length>2 ? sd/(mean||1) : 0.5;
-  const ttr = new Set(w.map(x=>x.toLowerCase())).size/nw;
-  let score = 0; score += Math.min(45, per100*18); score += cv<0.25?25:cv<0.4?12:0; score += mean>24&&mean<34?10:0; score += ttr>0.62&&nw>80?8:0; score += /,\s*(dan|and)\s/.test(t) && (t.match(/,/g)||[]).length/(sl.length||1)>2.5 ? 7 : 0;
-  return {score:Math.round(Math.min(100,score)), hits, cv:Math.round(cv*100)/100, mean:Math.round(mean)};
+  const hits = AI_PHRASES.filter(ph=>tl.includes(ph)).filter((ph,i,a)=>!a.some(o=>o!==ph && o.includes(ph)));
+  const sents = t.split(/(?<=[.!?])\s+(?=[A-Z“"(])/).filter(s=>words(s).length>2); const sl=sents.map(s=>words(s).length);
+  const mean=sl.reduce((a,b)=>a+b,0)/(sl.length||1); const sd=Math.sqrt(sl.reduce((a,b)=>a+(b-mean)**2,0)/(sl.length||1)); const cv = sl.length>=5 ? sd/(mean||1) : null;
+  const conn = (t.match(AI_CONNECT)||[]).length;
+  // tanda tulisan berpijak pada data/konteks nyata: angka, persen, sitasi, nama tempat/lembaga, kutipan langsung
+  const nums = (t.match(/\b\d+(?:[.,]\d+)?\s?%?/g)||[]).filter(x=>!/^(19|20)\d{2}$/.test(x.trim())).length;
+  const cites = (t.match(/\((?:[^()]*?)\b(?:1[89]|20)\d{2}[a-z]?\b[^()]*\)|[A-Z][a-z]+\s*(?:et al\.|dkk\.)?\s*\((?:1[89]|20)\d{2}/g)||[]).length;
+  const proper = (t.match(/(?<![.!?]\s)(?<!^)\b[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,})*\b/g)||[]).length;
+  const grounded = (nums>=2?1:0) + (cites?1:0) + (proper>=3?1:0) + (/[“"][^”"]{10,}[”"]/.test(t)?1:0);
+  // tricolon: "a, b, dan c" berulang
+  const lists = (t.match(/\b\w+,\s+\w+,?\s+(dan|serta|and)\s+\w+/gi)||[]).length;
+  let score = 0;
+  score += Math.min(56, hits.length*14);
+  score += conn>=3 && conn/(sents.length||1)>=0.5 ? 10 : 0;
+  score += cv!=null ? (cv<0.18?14:cv<0.28?7:0) : 0;
+  score += lists>=2 ? 6 : 0;
+  score += grounded===0 && nw>=60 ? 14 : 0;
+  score -= grounded*8;
+  return {score:Math.round(Math.max(0,Math.min(100,score))), hits, cv:cv==null?null:Math.round(cv*100)/100, mean:Math.round(mean), grounded, conn};
 }
 const aiState = () => S.aicheck || (S.aicheck = {rows:null, busy:false, err:"", overall:null, claude:null});
 function runAICheck(){
@@ -3717,7 +3759,7 @@ function vAICheck(){
   const X=aiState(); if (!X.rows) runAICheck();
   const R=X.rows; const RI=R.filter(incl); const tw=RI.reduce((a,r)=>a+words(r.text).length,0)||1; const ov=RI.length?Math.round(RI.reduce((a,r)=>a+r.score*words(r.text).length,0)/tw):0; X.overall=ov; const hi=RI.filter(r=>r.score>=60).length, md=RI.filter(r=>r.score>=35&&r.score<60).length;
   return dlBar("aicheck") + `<div class="card" style="margin-bottom:16px"><h3>Cek penggunaan AI<span class="r">indikatif</span></h3>
-    <p class="small muted" style="margin:0 0 10px">Setiap paragraf dinilai dari ciri gaya yang sering muncul pada teks buatan AI: frasa klise (mis. "memainkan peran penting", "it is important to note", "delve"), panjang kalimat yang terlalu seragam, dan transisi berulang. Claude dapat memberi penilaian kedua. <b>Hasil ini bukan bukti</b>: detektor AI dapat keliru, termasuk menandai tulisan manusia yang rapi. Gunakan sebagai bahan diskusi dengan penulis.</p>
+    <p class="small muted" style="margin:0 0 10px">Setiap paragraf (minimal 50 kata) dinilai dari ciri yang sering muncul pada teks buatan AI: frasa klise khas AI (mis. "tidak dapat dipungkiri", "memainkan peran yang sangat penting", "it is important to note", "delve"), panjang kalimat yang terlalu seragam, dan pernyataan umum tanpa data. Paragraf yang berpijak pada data nyata (angka, sitasi, nama tempat/lembaga, kutipan) menurunkan skor. Kata penghubung yang wajar seperti "selain itu" atau "oleh karena itu" tidak dihitung sebagai tanda AI. Claude dapat memberi penilaian kedua. <b>Hasil ini bukan bukti</b>: detektor AI dapat keliru, termasuk menandai tulisan manusia yang rapi. Gunakan sebagai bahan diskusi dengan penulis.</p>
     <div class="toolbar" style="margin:0"><button class="btn sm" data-act="aichk">Hitung ulang</button>${X.busy?`<span class="small"><span class="spinner" style="width:14px;height:14px;display:inline-block;vertical-align:middle"></span> Claude menilai…</span>`:`<button class="btn primary sm" data-act="aiclaude" ${S.sample?"":"disabled"}>${X.claude?"Nilai ulang dengan Claude":"Minta penilaian Claude"}</button>`}</div>
     ${X.err?`<div class="notice err" style="margin-top:10px">${icon(IC.warn)}<div>${esc(X.err)}</div></div>`:""}${X.claude?`<p class="small" style="margin:10px 0 0"><b>Penilaian Claude: ${X.claude.keseluruhan}%</b> · ${esc(X.claude.ringkasan)}</p>`:""}</div>
     <div class="kpis" style="grid-template-columns:repeat(3,minmax(0,1fr))">${[["Skor indikasi AI",`${X.overall}%`,aiLab(X.overall),IC.info],["Paragraf indikasi tinggi",hi,`dari ${RI.length} paragraf tercentang`,IC.warn],["Paragraf indikasi sedang",md,"perlu dicermati",IC.doc]].map(([l,v,x,d])=>`<div class="kpi"><div class="ic">${icon(d)}</div><div><div class="lb">${l}</div><div class="v">${v}</div><div class="s">${x}</div></div></div>`).join("")}</div>
