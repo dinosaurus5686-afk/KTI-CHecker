@@ -5127,6 +5127,43 @@ function vGDrive(){
 document.addEventListener("input", e=>{ if (e.target && e.target.id==="gdQ") gdState().q=e.target.value; });
 document.addEventListener("keydown", e=>{ if (e.target && e.target.id==="gdQ" && e.key==="Enter"){ e.preventDefault(); gdState().q=e.target.value; gdSearch(); } });
 
+/* ═════════════ DIAGNOSIS SAMBUNGAN CLAUDE (mis. dibuka di Chrome) ═════════════ */
+async function claudeDiagnose(){
+  const c=window.claude; if (!c || !c.use){ S.claudeWhy="outside"; return; }
+  let perms=null; try{ perms = await c.use("permissions"); }catch(e){} S._perms=perms;
+  let st="unavailable"; try{ if (perms) st = await perms.state("sample"); }catch(e){}
+  S.claudeWhy = st==="granted" ? "unavailable" : st;
+}
+async function claudeReconnect(how){
+  const c=window.claude; if (!c || !c.use || S.claudeBusy) return;
+  S.claudeBusy=true; render();
+  try{
+    const perms = S._perms || await c.use("permissions");
+    if (how==="request" && perms) await perms.request(["sample","downloads"]).catch(()=>{});
+    if (how==="manage" && perms){ try{ await perms.manage(); }catch(e){ toast("Panel izin tidak terbuka. Buka menu Izin (Permissions) pada halaman artifact ini."); } }
+    const [smp, dl, mcp] = await Promise.all([c.use("sample"), c.use("downloads"), c.use("mcp")]);
+    if (smp) S.sample=smp; if (dl) S.downloads=dl; if (mcp) S.mcp=mcp;
+  }catch(e){}
+  if (S.sample){ S.claudeWhy=null; S.aiErr=""; if (S.jr) S.jr.err=""; toast("Claude tersambung. Fitur review dan revisi siap dipakai."); }
+  else await claudeDiagnose();
+  S.claudeBusy=false; render();
+}
+function claudeBanner(){
+  if (!S.sampleChecked || S.sample) return "";
+  const w = S.claudeWhy || "unavailable";
+  const msg = w==="outside" ? "Halaman ini terbuka di luar claude.ai, sehingga fitur Claude (review reviewer, profil reviewer, revisi, grammar, copyedit) tidak bisa dipakai."
+    : w==="denied" ? "Izin <b>Claude</b> untuk halaman ini sedang <b>ditolak</b> di browser ini, sehingga review reviewer, profil reviewer, dan revisi tidak berjalan."
+    : w==="prompt" ? "Halaman ini <b>belum diberi izin</b> memakai Claude di browser ini."
+    : "Claude tidak bisa dihubungkan di browser ini. Penyebab paling umum: <b>belum masuk (login) ke claude.ai</b> di browser ini, masuk dengan <b>akun lain</b>, atau halaman dibuka dalam <b>mode penyamaran</b>.";
+  const steps = w==="unavailable" ? `<ol class="small" style="margin:6px 0 0;padding-left:18px"><li>Ketuk <b>Masuk ke claude.ai</b>, lalu login dengan akun yang sama dengan yang dipakai di aplikasi Claude.</li><li>Kembali ke tab ini, lalu ketuk <b>Hubungkan ulang</b> (atau muat ulang halaman).</li><li>Bila diminta izin memakai Claude, pilih <b>Izinkan</b>.</li></ol>` : "";
+  const btn = (act, label, pri) => `<button class="btn sm ${pri?"primary":""}" data-act="${act}" ${S.claudeBusy?"disabled":""}>${S.claudeBusy&&pri?"Menghubungkan…":label}</button>`;
+  const acts = w==="denied" ? btn("claudemanage","Buka pengaturan izin",true)+btn("claudereq","Hubungkan ulang")
+    : w==="prompt" ? btn("claudereq","Izinkan Claude",true)
+    : w==="outside" ? `<a class="btn sm primary" href="${ARTIFACT_URL}" target="_blank" rel="noopener">Buka di claude.ai</a>`
+    : `<a class="btn sm" href="https://claude.ai/login" target="_blank" rel="noopener">Masuk ke claude.ai</a>`+btn("claudereq","Hubungkan ulang",true);
+  return `<div class="notice err" role="alert" style="margin-bottom:16px;align-items:flex-start">${icon(IC.warn)}<div style="flex:1;min-width:0"><b>Claude belum tersambung.</b> ${msg}${steps}<div class="toolbar" style="margin:10px 0 0">${acts}</div><p class="small muted" style="margin:8px 0 0">Pemeriksaan otomatis, LOA &amp; Invoice, dan template tetap berjalan tanpa Claude.</p></div></div>`;
+}
+
 /* ═════════════ RUN ═════════════ */
 const WEIGHTS = {struktur:{e:5,w:2,cap:25},isi:{e:3,w:1,cap:15},abstrak:{e:3,w:1.5,cap:12},bahasa:{e:1.5,w:.5,cap:12},sitasi:{e:2,w:1,cap:16},visual:{e:2,w:1,cap:8},format:{e:3,w:1.5,cap:12}};
 const STEPS = ["Membaca susunan bab dan sub-bab","Memeriksa isi setiap bab","Memeriksa abstrak dan kata kunci","Memeriksa ejaan dan diksi","Mencocokkan sitasi dengan daftar pustaka","Memeriksa tabel, gambar, dan format"];
@@ -5484,7 +5521,7 @@ function render(){
   $("#selJenis").disabled = false;
   const views = {overview:()=>dlBar("overall")+vOverview(),perbab:vPerBab,naskah:vNaskah,struktur:vStruktur,isi:()=>findingsView("isi"),abstrak:vAbstrak,bahasa:vBahasa,sitasi:vSitasi,visual:()=>findingsView("visual"),format:vFormat,ai:()=>vAI()+(S.ai&&!isArt()&&!S.aiBusy?vReviewDl():""),revisi:vRevisi,copyedit:vCopyedit,template:vTemplate,ojs:vOJS,nor:vNor,banding:vBanding,grammar:vGrammar,similarity:vSimilarity,aicheck:vAICheck,admin:vAdmin,chat:vChat,unggah:vUnggah};
   const ae=document.activeElement; const keep = ae && ae.id && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) && $("#view").contains(ae) ? {id:ae.id, s:ae.selectionStart, e:ae.selectionEnd} : null;
-  $("#view").innerHTML = (isNorView(S.view)?vNorBar():"") + (staging ? vStage() : (S.view==="chat" && !S.local ? vStage() : views[S.view]()));
+  $("#view").innerHTML = (["unggah","admin"].includes(S.view)?"":claudeBanner()) + (isNorView(S.view)?vNorBar():"") + (staging ? vStage() : (S.view==="chat" && !S.local ? vStage() : views[S.view]()));
   if (keep){ const el=document.getElementById(keep.id); if (el){ el.focus({preventScroll:true}); try{ if (keep.s!=null) el.setSelectionRange(keep.s, keep.e); }catch(_){} } }
   $("#foot").textContent = `${isArt()?"Template artikel jurnal Nusantara of Research":"Pedoman KTI 2025"} · Hasil bersifat pendamping; keputusan akhir tetap pada dosen pembimbing dan editor.`;
   const msgs=$("#msgs"); if(msgs) msgs.scrollTop=msgs.scrollHeight;
@@ -5763,6 +5800,8 @@ document.addEventListener("click", e=>{
   const b = e.target.closest("button"); if(!b || b.disabled) return;
   if (b.id==="btnReset") return resetAll();
   if (b.dataset.cefooter){ ceState().meta.footer=b.dataset.cefooter; return render(); }
+  if (b.dataset.act==="claudereq") return claudeReconnect("request");
+  if (b.dataset.act==="claudemanage") return claudeReconnect("manage");
   if (b.dataset.gdopen){ return gdOpen(b.dataset.gdopen); }
   if (b.dataset.gdpick){ return gdPick(b.dataset.gdpick); }
   if (b.dataset.act==="gdsearch"){ const i=document.getElementById("gdQ"); if (i) gdState().q=i.value; return gdSearch(); }
@@ -5892,8 +5931,8 @@ document.addEventListener("click", e=>{ const a=e.target.closest && e.target.clo
   try{ const v=localStorage.getItem("kti.view"); if(v && viewMeta(v) && !["chat","unggah"].includes(v)) S.view=v; }catch(e){}
   render();
   const c = window.claude;
-  if (!c || !c.use){ S.sampleChecked=true; render(); return; }
+  if (!c || !c.use){ S.sampleChecked=true; S.claudeWhy="outside"; render(); return; }
   try{ const [smp, dl, mcp] = await Promise.all([c.use("sample"), c.use("downloads"), c.use("mcp")]); S.sample=smp; S.downloads=dl; S.mcp=mcp; }catch(e){}
-  S.sampleChecked=true; render();
+  S.sampleChecked=true; if (!S.sample) await claudeDiagnose(); render();
 })();
 </script>
