@@ -1915,10 +1915,10 @@ function saveDone(){ try{ localStorage.setItem(doneKey(), JSON.stringify(S.revDo
 
 function revComment(f){
   const M=S.local.M; const p = f.p!=null ? M.paras[f.p] : null;
-  return `<article class="f sev-${f.sev} ${incl(f)?"":"excl"}"><div class="f-head">${inclBox(f)}<h4>${esc(f.title)}</h4><span class="chip">${esc(f.reviewer)}</span>${sevPill(f.sev, f.sev==="error"?"Wajib":f.sev==="warning"?"Disarankan":"Catatan")}</div>
+  return `<article class="f sev-${f.sev} ${incl(f)?"":"excl"}"><div class="f-head">${inclBox(f)}<h4>${esc(f.title)}${edTag(f)}</h4><span class="chip">${esc(f.reviewer)}</span>${sevPill(f.sev, f.sev==="error"?"Wajib":f.sev==="warning"?"Disarankan":"Catatan")}</div>
     ${p&&p.text&&f.quote?`<div class="q">${snippet(p,f.quote)}</div>`:f.quote?`<div class="q">${esc(f.quote)}</div>`:""}
-    ${f.fix?`<div class="fix"><b>Saran:</b> ${esc(f.fix)}</div>`:""}
-    ${(f.verified!=null||p)?`<div class="meta">${f.verified===true?`<span class="verif y">✓ kutipan ditemukan di naskah</span>`:f.verified===false?`<span class="verif n">⚠ kutipan tidak ditemukan persis di naskah</span>`:""}${p?`<button class="linkish" data-goto="${f.p}">Lihat di naskah →</button>`:""}</div>`:""}</article>`;
+    ${f.fix && S.edId!==edKey(f)?`<div class="fix"><b>Saran:</b> ${esc(f.fix)}</div>`:""}
+    <div class="meta">${f.verified===true?`<span class="verif y">✓ kutipan ditemukan di naskah</span>`:f.verified===false?`<span class="verif n">⚠ kutipan tidak ditemukan persis di naskah</span>`:""}${p?`<button class="linkish" data-goto="${f.p}">Lihat di naskah →</button>`:""}${S.edId!==edKey(f)?edBox(f,"Saran"):""}</div>${S.edId===edKey(f)?edBox(f,"Saran"):""}</article>`;
 }
 function vReview(){
   const ai = S.ai && S.ai.mode==="review" ? S.ai : null;
@@ -1940,7 +1940,7 @@ function vReview(){
     body = `<div class="card"><h3>Petunjuk revisi dari editor<span class="r">${doneN} dari ${ai.petunjuk.length} selesai</span></h3>
       <div class="track" style="margin-bottom:14px"><i style="width:${pct(doneN,ai.petunjuk.length)}%;background:var(--ok)"></i></div>
       ${inclBar("pet","Petunjuk yang disertakan dalam laporan dan revisi")}<p class="small muted" style="margin:-4px 0 10px">Kotak kiri: disertakan dalam laporan dan revisi. Kotak kanan: tandai sudah dikerjakan.</p>
-      ${groups.map(([g,ps])=>`<h4 style="margin:14px 0 8px;font-size:13px">${esc(g)}</h4><div class="flist">${ps.map(p=>`<div class="pt-row ${incl(p)?"":"excl"}" style="display:flex;gap:8px;align-items:flex-start">${inclBox(p)}<label class="toggle" style="background:var(--surface);flex:1"><input type="checkbox" data-done="${esc(p.langkah)}" ${S.revDone[p.langkah]?"checked":""}><span style="flex:1;${S.revDone[p.langkah]?"text-decoration:line-through;opacity:.6":""}"><span style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px">${sevPill(p.prioritas==="wajib"?"error":"warning", p.prioritas==="wajib"?"Wajib":"Disarankan")}${p.reviewer.map(r=>`<span class="chip">Reviewer ${r}</span>`).join("")}</span><b style="font-weight:600">${esc(p.langkah)}</b>${p.contoh?`<span class="fix" style="display:block"><b>Contoh:</b> ${esc(p.contoh)}</span>`:""}</span></label></div>`).join("")}</div>`).join("")}
+      ${groups.map(([g,ps])=>`<h4 style="margin:14px 0 8px;font-size:13px">${esc(g)}</h4><div class="flist">${ps.map(p=>`<div class="pt-row ${incl(p)?"":"excl"}" style="display:flex;gap:8px;align-items:flex-start">${inclBox(p)}<label class="toggle" style="background:var(--surface);flex:1"><input type="checkbox" data-done="${esc(p.langkah)}" ${S.revDone[p.langkah]?"checked":""}><span style="flex:1;${S.revDone[p.langkah]?"text-decoration:line-through;opacity:.6":""}"><span style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px">${sevPill(p.prioritas==="wajib"?"error":"warning", p.prioritas==="wajib"?"Wajib":"Disarankan")}${p.reviewer.map(r=>`<span class="chip">Reviewer ${r}</span>`).join("")}</span><b style="font-weight:600">${esc(p.langkah)}${edTag(p)}</b>${p.contoh&&S.edId!==p.id?`<span class="fix" style="display:block"><b>Contoh:</b> ${esc(p.contoh)}</span>`:""}</span></label></div><div style="margin:-2px 0 6px 30px">${edBox(p,"Contoh")}</div>`).join("")}</div>`).join("")}
       ${ai.editorFailed?`<p class="small muted">Editor gagal menyusun petunjuk; daftar ini disusun dari komentar wajib para reviewer.</p>`:""}</div>`;
   } else if (S.revView==="bagian"){
     body = REV_SECTIONS.map(s=>{
@@ -2938,12 +2938,12 @@ function adviceText(fix, wajib){
 const lowerDec = d => String(d||"").toLowerCase();
 function reviewComments(only){
   const ai=S.ai, O=cmtOpt(), out=[]; if (!ai) return out;
-  const finding = (who, author, f) => ({who, author, p:f.p, quote:f.quote||"", scope:f.scope, p2:f.p2, quoteEnd:f.quoteEnd||"", bab:f.babAI||"", kat:f.kat||f.babAI||"", lines:[sentence(f.title)+(f.detail?" "+sentence(f.detail):""), adviceText(f.fix, f.sev==="error")]});
+  const finding = (who, author, f) => ({who, author, p:f.p, quote:f.quote||"", scope:f.scope, p2:f.p2, quoteEnd:f.quoteEnd||"", bab:f.babAI||"", kat:f.kat||f.babAI||"", manual:!!f._orig, lines: f._orig ? [f.title, f.fix] : [sentence(f.title)+(f.detail?" "+sentence(f.detail):""), adviceText(f.fix, f.sev==="error")]});
   if (ai.mode==="review"){
     if (O.editor) out.push({who:"Editor", author:revName("Editor"), p:null, quote:"", lines:[`Keputusan editor untuk naskah ini adalah ${lowerDec(ai.keputusan)}.`, sentence(ai.ringkasan)]});
     if (O.umum) ai.reviewers.forEach(r=>out.push({who:r.nama, author:revName(r.nama), p:null, quote:"", lines:[`Rekomendasi saya untuk naskah ini adalah ${lowerDec(r.rekomendasi)}.`, sentence(r.ringkasan)]}));
     ai.findings.filter(incl).forEach(f=>out.push(finding(f.reviewer, revName(f.reviewer), f)));
-    if (O.editor) ai.petunjuk.filter(incl).forEach(pt=>{ const f = ai.findings.find(x=>x.p!=null && fold(x.kat).startsWith(fold(pt.bagian).slice(0,6))); out.push({who:"Editor", author:revName("Editor"), p:f?f.p:null, quote:"", scope:"bagian", bab:REV_BAB[REV_SECTIONS.find(s=>fold(pt.bagian).startsWith(fold(s).slice(0,6)))]||"", kat:pt.bagian, lines:[adviceText(pt.langkah, pt.prioritas==="wajib").replace(/^Sebaiknya /,"Mohon "), pt.contoh?"Contohnya: "+plainText(pt.contoh).replace(/^contoh\s*:\s*/i,""):""]}); });
+    if (O.editor) ai.petunjuk.filter(incl).forEach(pt=>{ const f = ai.findings.find(x=>x.p!=null && fold(x.kat).startsWith(fold(pt.bagian).slice(0,6))); out.push({who:"Editor", author:revName("Editor"), p:f?f.p:null, quote:"", scope:"bagian", bab:REV_BAB[REV_SECTIONS.find(s=>fold(pt.bagian).startsWith(fold(s).slice(0,6)))]||"", kat:pt.bagian, manual:!!pt._orig, lines:[pt._orig ? pt.langkah : adviceText(pt.langkah, pt.prioritas==="wajib").replace(/^Sebaiknya /,"Mohon "), pt.contoh?"Contohnya: "+plainText(pt.contoh).replace(/^contoh\s*:\s*/i,""):""]}); });
   } else {
     ai.findings.filter(incl).forEach(f=>out.push(finding("Claude", revName("Claude"), f)));
   }
@@ -2956,7 +2956,7 @@ async function simplifyComments(list){
   if (!S.sample || !list.length) return list;
   const cache = S.simpleCache || (S.simpleCache = {});
   const key = c => c.lines.join("\n");
-  const todo = list.filter(c=>!cache[key(c)]);
+  const todo = list.filter(c=>!c.manual && !cache[key(c)]);
   for (let i=0;i<todo.length;i+=25){
     const part = todo.slice(i,i+25);
     try{
@@ -2964,7 +2964,7 @@ async function simplifyComments(list){
       (Array.isArray(r)?r:[]).forEach(x=>{ const c=part[+x.i]; if (!c || !x.kurang) return; cache[key(c)] = [sentence(x.kurang), x.saran?sentence(x.saran):""].filter(Boolean); });
     }catch(e){ console.warn("Penyederhanaan gagal", e); break; }
   }
-  return list.map(c=>cache[key(c)] ? {...c, lines:[...cache[key(c)]]} : c);
+  return list.map(c=>!c.manual && cache[key(c)] ? {...c, lines:[...cache[key(c)]]} : c);
 }
 
 /* ── penempatan komentar pada teks dokumen Word ── */
@@ -5164,6 +5164,42 @@ function claudeBanner(){
   return `<div class="notice err" role="alert" style="margin-bottom:16px;align-items:flex-start">${icon(IC.warn)}<div style="flex:1;min-width:0"><b>Claude belum tersambung.</b> ${msg}${steps}<div class="toolbar" style="margin:10px 0 0">${acts}</div><p class="small muted" style="margin:8px 0 0">Pemeriksaan otomatis, LOA &amp; Invoice, dan template tetap berjalan tanpa Claude.</p></div></div>`;
 }
 
+/* ═════════════ SUNTING KOMENTAR & SARAN CLAUDE (teks Claude dipakai bila tidak disunting) ═════════════ */
+const edKey = f => { if (!f.id) f.id = fid(f); return f.id; };
+const edList = () => [...(S.ai && S.ai.findings || []), ...(S.ai && S.ai.petunjuk || [])];
+const edFind = id => edList().find(f=>f.id===id);
+function edBox(f, fixLabel){
+  const id = edKey(f);
+  if (S.edId !== id) return `<button class="linkish" data-edopen="${esc(id)}">✎ Edit komentar &amp; saran</button>`;
+  const pet = f.langkah!==undefined;
+  const full = pet ? f.langkah : [f.title, f.detail].filter(Boolean).join(" "); const second = pet ? f.contoh : f.fix;
+  const rows = s => Math.min(8, Math.max(2, Math.ceil(String(s||"").length/80)));
+  return `<div class="edbox" style="margin-top:10px;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--surface-2);display:flex;flex-direction:column;gap:6px">
+    <label class="small" for="edT" style="font-weight:700">${pet?"Petunjuk":"Komentar"}</label>
+    <textarea id="edT" rows="${rows(full)}" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font:inherit;font-size:13px;resize:vertical">${esc(full)}</textarea>
+    <label class="small" for="edF" style="font-weight:700">${esc(fixLabel)}</label>
+    <textarea id="edF" rows="${rows(second)}" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font:inherit;font-size:13px;resize:vertical">${esc(second||"")}</textarea>
+    <div class="toolbar" style="margin:4px 0 0"><button class="btn sm primary" data-edsave="${esc(id)}">Simpan</button><button class="btn sm" data-edcancel="1">Batal</button>${f._orig?`<button class="btn sm" data-edreset="${esc(id)}">Kembalikan teks Claude</button>`:""}<span class="small muted">Dipakai di balon komentar Word, laporan, dan Revisi Naskah.</span></div></div>`;
+}
+const edTag = f => f._orig ? ` <span class="chip" title="Teks sudah Anda sunting">diedit</span>` : "";
+function edSave(id){
+  const f=edFind(id); if (!f) return;
+  const t=(document.getElementById("edT")||{}).value, x=(document.getElementById("edF")||{}).value;
+  if (t==null) return;
+  if (f.langkah!==undefined){
+    if (!f._orig) f._orig = {langkah:f.langkah, contoh:f.contoh||""};
+    const old=f.langkah; f.langkah = String(t).trim() || f._orig.langkah; f.contoh = String(x||"").trim();
+    if (old!==f.langkah && S.revDone && S.revDone[old]!=null){ S.revDone[f.langkah]=S.revDone[old]; delete S.revDone[old]; try{ saveDone(); }catch(_){} }
+    if (f.langkah===f._orig.langkah && f.contoh===f._orig.contoh) delete f._orig;
+    S.edId=null; toast("Petunjuk disimpan."); return render();
+  }
+  if (!f._orig) f._orig = {title:f.title, detail:f.detail||"", fix:f.fix||""};
+  f.title = String(t).trim() || f._orig.title; f.detail = ""; f.fix = String(x||"").trim();
+  if (f.title===f._orig.title && !f._orig.detail && f.fix===f._orig.fix) delete f._orig;
+  S.edId=null; toast("Komentar disimpan."); render();
+}
+function edReset(id){ const f=edFind(id); if (!f || !f._orig) return; if (f.langkah!==undefined){ const old=f.langkah; f.langkah=f._orig.langkah; f.contoh=f._orig.contoh; if (S.revDone && S.revDone[old]!=null){ S.revDone[f.langkah]=S.revDone[old]; delete S.revDone[old]; } } else { f.title=f._orig.title; f.detail=f._orig.detail; f.fix=f._orig.fix; } delete f._orig; S.edId=null; toast("Teks Claude dikembalikan."); render(); }
+
 /* ═════════════ RUN ═════════════ */
 const WEIGHTS = {struktur:{e:5,w:2,cap:25},isi:{e:3,w:1,cap:15},abstrak:{e:3,w:1.5,cap:12},bahasa:{e:1.5,w:.5,cap:12},sitasi:{e:2,w:1,cap:16},visual:{e:2,w:1,cap:8},format:{e:3,w:1.5,cap:12}};
 const STEPS = ["Membaca susunan bab dan sub-bab","Memeriksa isi setiap bab","Memeriksa abstrak dan kata kunci","Memeriksa ejaan dan diksi","Mencocokkan sitasi dengan daftar pustaka","Memeriksa tabel, gambar, dan format"];
@@ -5232,11 +5268,11 @@ function findingCard(f){
   const ver = f.ai ? (f.verified===true?`<span class="verif y">✓ kutipan ditemukan di naskah</span>`:f.verified===false?`<span class="verif n">⚠ kutipan tidak ditemukan persis di naskah</span>`:"") : "";
   const tag = f.ai ? `${f.reviewer?`<span class="chip">${esc(f.reviewer)}</span>`:""}<span class="chip">${esc(f.kat)}</span>` : "";
   return `<article class="f sev-${f.sev} ${incl(f)?"":"excl"}">
-    <div class="f-head">${inclBox(f)}<h4>${esc(f.title)}</h4>${sevPill(f.sev)}</div>
-    ${f.detail?`<p>${esc(f.detail)}</p>`:""}
+    <div class="f-head">${inclBox(f)}<h4>${esc(f.title)}${f.ai?edTag(f):""}</h4>${sevPill(f.sev)}</div>
+    ${f.detail && !(f.ai && S.edId===edKey(f))?`<p>${esc(f.detail)}</p>`:""}
     ${p && p.text ? `<div class="q">${snippet(p, f.quote)}</div>` : (f.ai && f.quote ? `<div class="q">${esc(f.quote)}</div>`:"")}
-    ${f.fix?`<div class="fix"><b>Perbaikan:</b> ${esc(f.fix)}</div>`:""}
-    <div class="meta">${tag}${p?`<span class="chip">${esc(loc(p))}</span>`:f.babAI?`<span class="chip">${esc(f.babAI)}</span>`:""}${occ}${ver}${p?`<button class="linkish" data-goto="${f.p}">Lihat di naskah →</button>`:""}</div>
+    ${f.fix && !(f.ai && S.edId===edKey(f))?`<div class="fix"><b>Perbaikan:</b> ${esc(f.fix)}</div>`:""}
+    <div class="meta">${tag}${p?`<span class="chip">${esc(loc(p))}</span>`:f.babAI?`<span class="chip">${esc(f.babAI)}</span>`:""}${occ}${ver}${p?`<button class="linkish" data-goto="${f.p}">Lihat di naskah →</button>`:""}${f.ai && S.edId!==edKey(f)?edBox(f,"Perbaikan"):""}</div>${f.ai && S.edId===edKey(f)?edBox(f,"Perbaikan"):""}
   </article>`;
 }
 function findingsView(cat, intro=""){
@@ -5800,6 +5836,10 @@ document.addEventListener("click", e=>{
   const b = e.target.closest("button"); if(!b || b.disabled) return;
   if (b.id==="btnReset") return resetAll();
   if (b.dataset.cefooter){ ceState().meta.footer=b.dataset.cefooter; return render(); }
+  if (b.dataset.edopen){ S.edId=b.dataset.edopen; render(); const t=document.getElementById("edT"); if (t){ t.focus(); t.setSelectionRange(t.value.length,t.value.length); } return; }
+  if (b.dataset.edsave) return edSave(b.dataset.edsave);
+  if (b.dataset.edreset) return edReset(b.dataset.edreset);
+  if (b.dataset.edcancel){ S.edId=null; return render(); }
   if (b.dataset.act==="claudereq") return claudeReconnect("request");
   if (b.dataset.act==="claudemanage") return claudeReconnect("manage");
   if (b.dataset.gdopen){ return gdOpen(b.dataset.gdopen); }
