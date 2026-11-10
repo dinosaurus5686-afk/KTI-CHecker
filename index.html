@@ -4688,7 +4688,9 @@ function ceFinalCard(){
   return `<div class="card" style="margin-bottom:16px;${S.finalMode?"":"border:2px solid var(--accent,#4f46e5)"}"><h3>Unggah artikel final<span class="r">langsung ke template · tanpa review dan revisi</span></h3>
     <p class="small" style="margin:0 0 10px">Untuk naskah yang sudah diperbaiki penulis dan tidak perlu direview ulang. Sistem hanya: <b>unggah → ekstrak seluruh isi</b> (judul, penulis, institusi, e-mail, abstrak, kata kunci, semua bagian, tabel, gambar, rujukan) <b>→ sesuaikan dengan template NOR → unduh</b>. Isi tulisan penulis tidak diubah.</p>
     <div class="toolbar" style="margin:0"><label class="btn ${S.finalMode?"":"primary"}" style="cursor:pointer;position:relative">${busy?"Membaca berkas…":S.finalMode?"Ganti artikel final":"Pilih artikel final (.docx / .pdf)"}<input type="file" id="ceFinalIn" accept=".docx,.pdf,.txt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf,text/plain" style="position:absolute;inset:0;opacity:0;cursor:pointer" ${busy?"disabled":""}></label>
+      <button class="btn sm" data-gdopen="final">Dari Google Drive</button>
       ${S.finalMode&&S.doc?`<span class="small">✓ <b>${esc(S.doc.name)}</b> diekstrak. Isi volume, nomor, register, dan halaman di bawah, periksa pratinjau, lalu tekan <b>Unduh artikel sesuai template</b>.</span>`:`<span class="small muted">.docx paling akurat (gambar dan tabel ikut terbawa).</span>`}</div>
+    ${gdState().target==="final"?vGDrive():""}
     ${S.ce&&S.ce.E?ceLinkBox():""}
     ${S.ceUpErr?`<div class="upstate err" role="alert" style="margin-top:10px">${icon(IC.warn)}<div>${esc(S.ceUpErr)}</div></div>`:""}</div>`;
 }
@@ -5065,6 +5067,66 @@ function bgInit(){
 }
 bgInit();
 
+/* ═════════════ AMBIL NASKAH DARI GOOGLE DRIVE (jalan unggah di aplikasi Claude HP) ═════════════ */
+const GD = "Google Drive";
+const GD_MIMES = ["application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/pdf","application/vnd.google-apps.document","text/plain"];
+const gdState = () => S.gd || (S.gd = {open:false, target:"upload", q:"", busy:"", err:"", files:null});
+function gdErr(e){
+  const c = e && e.code;
+  if (c==="server_not_connected") return "Google Drive belum tersambung untuk akun ini. Sambungkan di claude.ai → Pengaturan → Konektor → Google Drive, lalu coba lagi.";
+  if (c==="needs_reauth") return "Sambungan Google Drive kedaluwarsa. Sambungkan ulang di claude.ai → Pengaturan → Konektor → Google Drive.";
+  if (c==="not_granted" || c==="not_in_manifest" || c==="capability_disabled") return "Izin Google Drive untuk halaman ini belum diberikan. Ketuk tombolnya lagi lalu pilih Izinkan, atau atur di menu Izin (Permissions) artifact.";
+  if (c==="blocked_by_policy") return "Organisasi Anda tidak mengizinkan halaman ini memakai Google Drive.";
+  if (c==="rate_limited") return "Terlalu banyak permintaan ke Google Drive. Tunggu sebentar lalu coba lagi.";
+  if (c==="tool_error") return "Google Drive menolak permintaan: "+(e.message||"coba lagi.");
+  return "Google Drive tidak menjawab ("+(c||e&&e.message||"galat")+"). Coba lagi.";
+}
+async function gdSearch(){
+  const G=gdState(); if (!S.mcp){ G.err="Fitur ini hanya berjalan saat aplikasi dibuka di claude.ai atau aplikasi Claude."; return render(); }
+  G.busy="Mencari berkas…"; G.err=""; render();
+  const types = "("+GD_MIMES.map(m=>`mimeType = '${m}'`).join(" or ")+")";
+  const q = G.q.trim() ? `title contains '${G.q.trim().replace(/\\/g,"").replace(/'/g,"\\'")}' and ${types} and trashed = false` : `${types} and trashed = false`;
+  try{
+    const r = await S.mcp.callTool(GD, "search_files", {query:q, pageSize:20, excludeContentSnippets:true, orderBy:"modifiedTime desc"}, {cache:false});
+    const p = r && r.payload; G.files = ((p && p.files) || []).map(f=>({id:f.id, title:f.title||"tanpa judul", mime:f.mimeType||"", size:+f.fileSize||0, modified:f.modifiedTime||"", owner:f.owner||""}));
+  }catch(e){ G.err = gdErr(e); G.files = G.files || []; }
+  G.busy=""; render();
+}
+const b64Bytes = b64 => { const bin=atob(String(b64||"").replace(/\s+/g,"")); const u=new Uint8Array(bin.length); for (let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return u; };
+async function gdPick(id){
+  const G=gdState(); const f=(G.files||[]).find(x=>x.id===id); if (!f || G.busy) return;
+  if (f.size > 40*1024*1024){ G.err="Berkas lebih dari 40 MB."; return render(); }
+  const gdoc = f.mime==="application/vnd.google-apps.document";
+  G.busy=`Mengambil "${f.title}"…`; G.err=""; render();
+  try{
+    const r = await S.mcp.callTool(GD, "download_file_content", gdoc ? {fileId:id, exportMimeType:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"} : {fileId:id}, {cache:false});
+    const p = r && r.payload; const content = p && (p.content || p.data);
+    if (!content) throw {code:"tool_error", message:"isi berkas kosong."};
+    let name = f.title; const mime = gdoc ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : (p.mimeType||f.mime);
+    if (gdoc && !/\.docx$/i.test(name)) name += ".docx";
+    if (!/\.[a-z0-9]{2,5}$/i.test(name)) name += mime.includes("pdf")?".pdf":mime.includes("text")?".txt":".docx";
+    const file = new File([b64Bytes(content)], name, {type:mime});
+    const target = G.target; G.busy=""; G.open=false; render();
+    await handleFile(file, target==="final" ? {final:true} : {});
+  }catch(e){ G.busy=""; G.err = e && e.code ? gdErr(e) : ("Berkas tidak bisa diambil: "+(e&&e.message||e)); render(); }
+}
+function gdOpen(target){ const G=gdState(); G.open=true; G.target=target||"upload"; G.err=""; if (!G.files) gdSearch(); else render(); }
+function vGDrive(){
+  const G=gdState(); if (!G.open) return "";
+  const when = t => { const d=new Date(t); return isNaN(d) ? "" : `${d.getDate()} ${BULAN[d.getMonth()].slice(0,3)} ${d.getFullYear()}`; };
+  const kind = m => m.includes("pdf")?"PDF":m.includes("google-apps")?"Google Docs":m.includes("text")?"Teks":"Word";
+  const kb = n => n ? (n>1048576 ? (n/1048576).toFixed(1).replace(".",",")+" MB" : Math.round(n/1024)+" KB") : "";
+  return `<div class="card" style="margin-bottom:16px;border:2px solid var(--gold,var(--accent))"><h3>Ambil dari Google Drive<span class="r">${G.target==="final"?"untuk artikel final":"naskah untuk dianalisis"}</span></h3>
+    <p class="small muted" style="margin:0 0 10px">Simpan artikel ke Google Drive lebih dulu (dari aplikasi Drive, WhatsApp, atau email di HP), lalu pilih di sini. Berkas Word, PDF, dan Google Docs bisa dipakai.</p>
+    <div class="toolbar" style="margin:0 0 10px"><input id="gdQ" type="search" value="${esc(G.q)}" placeholder="Cari judul berkas, mis. artikel 29720" style="flex:1;min-width:0;padding:9px 12px;border:1px solid var(--line);border-radius:999px;background:var(--surface);font-size:13px"><button class="btn primary sm" data-act="gdsearch" ${G.busy?"disabled":""}>Cari</button><button class="btn sm" data-act="gdclose">Tutup</button></div>
+    ${G.busy?`<div class="upstate busy" role="status"><div class="spinner"></div><div>${esc(G.busy)}</div></div>`:""}
+    ${G.err?`<div class="upstate err" role="alert">${icon(IC.warn)}<div>${esc(G.err)}</div></div>`:""}
+    ${G.files&&!G.busy?(G.files.length?`<ul class="norlist">${G.files.map(f=>`<li style="align-items:center"><span>📄</span><span style="flex:1;min-width:0"><b style="word-break:break-word">${esc(f.title)}</b><br><span class="small muted">${kind(f.mime)}${f.size?` · ${kb(f.size)}`:""}${f.modified?` · diubah ${when(f.modified)}`:""}</span></span><button class="btn sm primary" data-gdpick="${esc(f.id)}">Pakai</button></li>`).join("")}</ul>`:`<p class="small muted" style="margin:0">Tidak ada berkas Word/PDF/Google Docs yang cocok.</p>`):""}
+  </div>`;
+}
+document.addEventListener("input", e=>{ if (e.target && e.target.id==="gdQ") gdState().q=e.target.value; });
+document.addEventListener("keydown", e=>{ if (e.target && e.target.id==="gdQ" && e.key==="Enter"){ e.preventDefault(); gdState().q=e.target.value; gdSearch(); } });
+
 /* ═════════════ RUN ═════════════ */
 const WEIGHTS = {struktur:{e:5,w:2,cap:25},isi:{e:3,w:1,cap:15},abstrak:{e:3,w:1.5,cap:12},bahasa:{e:1.5,w:.5,cap:12},sitasi:{e:2,w:1,cap:16},visual:{e:2,w:1,cap:8},format:{e:3,w:1.5,cap:12}};
 const STEPS = ["Membaca susunan bab dan sub-bab","Memeriksa isi setiap bab","Memeriksa abstrak dan kata kunci","Memeriksa ejaan dan diksi","Mencocokkan sitasi dengan daftar pustaka","Memeriksa tabel, gambar, dan format"];
@@ -5366,7 +5428,7 @@ function vChat(){
     ${S.chat.length?`<button class="linkish" data-act="chatclear" style="align-self:flex-start">Mulai percakapan baru</button>`:""}</div>`;
 }
 function vUnggah(){
-  return vWorks() + `${!S.doc?`<div class="notice">${icon(IC.info)}<div>Belum ada naskah. Unggah berkas atau tempel teks, lalu tekan <b>Mulai analisis</b>.</div></div>`:""}<section class="grid">
+  return (gdState().target!=="final"?vGDrive():"") + vWorks() + `${!S.doc?`<div class="notice">${icon(IC.info)}<div>Belum ada naskah. Unggah berkas atau tempel teks, lalu tekan <b>Mulai analisis</b>.</div></div>`:""}<section class="grid">
     <div class="card c6"><h3>Unggah berkas</h3>
       <div class="drop" id="drop">
         <input type="file" id="fileIn2" class="pick" accept=".docx,.pdf,.txt,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf,text/plain" aria-label="Pilih berkas naskah (.docx, .pdf, atau .txt)" ${S.fileBusy?"disabled":""}>
@@ -5378,7 +5440,8 @@ function vUnggah(){
       </div>
       ${S.fileBusy?`<div class="upstate busy" role="status"><div class="spinner"></div><div>Membaca <b>${esc(S.fileBusy)}</b>… Berkas besar dapat memerlukan beberapa detik.</div></div>`:""}
       ${S.uploadErr?`<div class="upstate err" role="alert">${icon(IC.warn)}<div>${esc(S.uploadErr)}</div></div>`:""}
-      ${S.pickerBlocked?`<div class="upstate err" role="alert">${icon(IC.warn)}<div><b>Pemilih berkas tidak terbuka.</b> Aplikasi Claude di HP ini belum mengizinkan halaman memilih berkas. Pilih salah satu:<ol style="margin:6px 0 0;padding-left:18px"><li><a class="linkish" href="${ARTIFACT_URL}" target="_blank" rel="noopener">Buka halaman ini di browser (Chrome/Safari)</a>, masuk ke akun Claude, lalu unggah berkas.</li><li>Buka naskah di Google Docs atau Word di HP → <b>Pilih semua</b> → <b>Salin</b>, lalu tempel di kotak <b>Tempel dari Word/Google Docs</b>. Judul, cetak miring, tabel, dan gambar ikut terbaca.</li></ol></div></div>`:`<p class="small muted" style="margin:10px 0 0">Di aplikasi Claude untuk HP, bila pemilih berkas tidak muncul, <a class="linkish" href="${ARTIFACT_URL}" target="_blank" rel="noopener">buka di browser</a> atau gunakan tempel dari Word/Google Docs.</p>`}
+      <div class="toolbar" style="margin:12px 0 0"><button class="btn ${S.pickerBlocked?"primary":""}" data-gdopen="upload"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3h8l6 10-4 7H6l-4-7z"/><path d="M8 3l6 10H2M16 3l-6 10M10 13h12"/></svg>Ambil dari Google Drive</button><span class="small muted">bisa dipakai di aplikasi Claude HP</span></div>
+      ${S.pickerBlocked?`<div class="upstate err" role="alert">${icon(IC.warn)}<div><b>Pemilih berkas tidak terbuka.</b> Aplikasi Claude di HP ini belum mengizinkan halaman memilih berkas. Pilih salah satu:<ol style="margin:6px 0 0;padding-left:18px"><li><b>Ambil dari Google Drive</b> (tombol di atas): simpan artikel ke Google Drive, lalu pilih di sini. Cara paling mudah di HP.</li><li><a class="linkish" href="${ARTIFACT_URL}" target="_blank" rel="noopener">Buka halaman ini di browser (Chrome/Safari)</a>, masuk ke akun Claude, lalu unggah berkas.</li><li>Buka naskah di Google Docs atau Word di HP → <b>Pilih semua</b> → <b>Salin</b>, lalu tempel di kotak <b>Tempel dari Word/Google Docs</b>. Judul, cetak miring, tabel, dan gambar ikut terbaca.</li></ol></div></div>`:`<p class="small muted" style="margin:10px 0 0">Di aplikasi Claude untuk HP, bila pemilih berkas tidak muncul, <a class="linkish" href="${ARTIFACT_URL}" target="_blank" rel="noopener">buka di browser</a> atau gunakan tempel dari Word/Google Docs.</p>`}
       <div class="notice" style="margin-top:12px">${icon(IC.info)}<div>Berkas dibaca di perangkat Anda. Teks naskah baru dikirim ke Claude jika Anda menyertakan tinjauan Claude atau bertanya di Tanya Pembimbing.</div></div>
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn" data-act="sample-kti">Muat contoh proposal</button><button class="btn" data-act="sample-art">Muat contoh artikel jurnal</button><button class="btn" data-view="admin">Buat LOA &amp; Invoice</button></div>
     </div>
@@ -5700,6 +5763,10 @@ document.addEventListener("click", e=>{
   const b = e.target.closest("button"); if(!b || b.disabled) return;
   if (b.id==="btnReset") return resetAll();
   if (b.dataset.cefooter){ ceState().meta.footer=b.dataset.cefooter; return render(); }
+  if (b.dataset.gdopen){ return gdOpen(b.dataset.gdopen); }
+  if (b.dataset.gdpick){ return gdPick(b.dataset.gdpick); }
+  if (b.dataset.act==="gdsearch"){ const i=document.getElementById("gdQ"); if (i) gdState().q=i.value; return gdSearch(); }
+  if (b.dataset.act==="gdclose"){ gdState().open=false; return render(); }
   if (b.dataset.workopen!=null){ if (S.doc && S.doc._key===b.dataset.workopen) return go("overview"); return workOpen(b.dataset.workopen); }
   if (b.dataset.workdel!=null){ const k=b.dataset.workdel; if (S.workDelArm!==k){ S.workDelArm=k; b.textContent = k ? "Ketuk lagi untuk menghapus" : "Ketuk lagi untuk menghapus semua"; setTimeout(()=>{ if (S.workDelArm===k){ S.workDelArm=null; render(); } }, 4000); return; } S.workDelArm=null; toast(k?"Naskah dihapus dari perangkat.":"Semua naskah tersimpan dihapus."); return workDelete(k); }
   if (b.dataset.act==="norzip") return norZip();
