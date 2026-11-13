@@ -1,0 +1,64 @@
+name: Build aplikasi Windows
+
+on:
+  push:
+    paths:
+      - "desktop/**"
+      - "index.html"
+      - ".github/workflows/desktop-windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Pasang dependensi
+        run: npm ci
+
+      - name: Build installer (.exe)
+        run: npm run dist
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Baca versi
+        id: ver
+        shell: bash
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Unggah sebagai artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KTI-Checker-NOR-Setup-${{ steps.ver.outputs.version }}
+          path: desktop/dist/*.exe
+          if-no-files-found: error
+
+      - name: Terbitkan rilis
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: desktop-v${{ steps.ver.outputs.version }}
+          name: KTI Checker NOR ${{ steps.ver.outputs.version }} (Windows)
+          target_commitish: ${{ github.sha }}
+          files: desktop/dist/*.exe
+          body: |
+            Installer aplikasi desktop **KTI Checker NOR** untuk Windows 10/11 (64-bit).
+
+            1. Unduh `KTI-Checker-NOR-Setup-${{ steps.ver.outputs.version }}.exe` di bawah.
+            2. Jalankan. Bila muncul "Windows protected your PC", klik **More info → Run anyway** (installer belum ditandatangani sertifikat).
+            3. Ikuti langkah instalasi, lalu buka **KTI Checker NOR** dari Desktop atau menu Start.
+            4. Isi API key di **Pengaturan AI** (Google AI Studio, ClassAI Router, OpenAI, Anthropic, OpenRouter, atau kustom).
+
+            Dibangun dari commit ${{ github.sha }}.
