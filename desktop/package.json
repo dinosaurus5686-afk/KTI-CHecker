@@ -1,7 +1,7 @@
 {
   "name": "kti-checker-desktop",
   "productName": "KTI Checker NOR",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "KTI Checker (Nusantara of Research) untuk Windows: pemeriksaan naskah KTI/artikel dengan API key Gemini, ClassAI Router, OpenAI, Anthropic, OpenRouter.",
   "author": "Nusantara of Research",
   "license": "UNLICENSED",

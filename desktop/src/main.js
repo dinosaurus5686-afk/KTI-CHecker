@@ -6,6 +6,7 @@ const path = require("path");
 const fs = require("fs");
 const { pathToFileURL } = require("url");
 const { PROVIDERS } = require("./providers");
+const LIT = require("./literature");
 
 protocol.registerSchemesAsPrivileged([
   { scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }
@@ -54,7 +55,17 @@ function publicSettings() {
       modelList: p.modelList || []
     };
   }
+  out.services = {};
+  for (const id of Object.keys(LIT.SERVICES)) {
+    const v = (s.services || {})[id] || {};
+    const k = decKey(v.key);
+    out.services[id] = { hasKey: !!k, keyHint: k ? (k.slice(0, 4) + "…" + k.slice(-4)) : "", enabled: v.enabled === undefined ? LIT.SERVICES[id].defaultOn !== false : !!v.enabled, extra: v.extra || {} };
+  }
   return out;
+}
+function serviceConfig(id) {
+  const s = readRaw(); const v = (s.services || {})[id] || {};
+  return { key: decKey(v.key), enabled: v.enabled === undefined ? LIT.SERVICES[id].defaultOn !== false : !!v.enabled, extra: v.extra || {} };
 }
 function saveSettings(patch) {
   const s = readRaw();
@@ -71,6 +82,15 @@ function saveSettings(patch) {
     if (p.models !== undefined) cur.models = p.models;
     if (p.modelList !== undefined) cur.modelList = p.modelList;
     s.providers[id] = cur;
+  }
+  s.services = s.services || {};
+  for (const [id, v] of Object.entries(patch.services || {})) {
+    if (!LIT.SERVICES[id]) continue;
+    const cur = s.services[id] || {};
+    if (v.key !== undefined) cur.key = v.key === null ? "" : (v.key ? encKey(String(v.key).trim()) : cur.key || "");
+    if (v.enabled !== undefined) cur.enabled = !!v.enabled;
+    if (v.extra !== undefined) cur.extra = Object.assign({}, cur.extra || {}, v.extra);
+    s.services[id] = cur;
   }
   writeRaw(s);
   return publicSettings();
@@ -221,6 +241,68 @@ ipcMain.handle("ai:listModels", async (ev, id, draft) => {
 ipcMain.handle("settings:get", () => publicSettings());
 ipcMain.handle("settings:save", (ev, patch) => saveSettings(patch || {}));
 ipcMain.handle("settings:providers", () => PROVIDERS);
+ipcMain.handle("settings:services", () => LIT.SERVICES);
+// Pencarian literatur dijalankan di proses utama agar kunci tidak keluar ke halaman dan bebas CORS.
+const litActive = new Map();
+ipcMain.handle("lit:search", async (ev, reqId, id, args, draftKey) => {
+  const ctl = new AbortController(); litActive.set(reqId, ctl);
+  try {
+    if (!LIT.SERVICES[id]) throw { code: "unknown", message: "Layanan tidak dikenal: " + id };
+    const cfg = serviceConfig(id);
+    if (draftKey) cfg.key = draftKey;
+    const data = await LIT.search(id, args || {}, cfg, ctl.signal, { fetch: net.fetch, perplexityKey: () => { const r = readRaw(); return decKey(((r.providers || {}).perplexity || {}).key); } });
+    return { ok: true, data };
+  } catch (e) {
+    if (ctl.signal.aborted) return { ok: false, error: { code: "cancelled" } };
+    return { ok: false, error: { code: (e && e.code) || "network", message: (e && e.message) || String(e) } };
+  } finally { litActive.delete(reqId); }
+});
+ipcMain.on("lit:abort", (ev, reqId) => { const c = litActive.get(reqId); if (c) c.abort(); });
+ipcMain.handle("sjr:lookup", (ev, items) => LIT.sjrLookup(items || []));
+ipcMain.handle("sjr:info", () => LIT.sjrInfo());
+// Data kuartil SCImago: diunduh langsung dari scimagojr.com, atau diimpor dari berkas yang diunduh pengguna.
+ipcMain.handle("sjr:download", async () => {
+  const year = new Date().getFullYear() - 1;
+  const urls = [`https://www.scimagojr.com/journalrank.php?out=xls&year=${year}`, "https://www.scimagojr.com/journalrank.php?out=xls"];
+  let lastErr = "";
+  for (const u of urls) {
+    try {
+      const r = await net.fetch(u, { headers: { "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) KTI-Checker-NOR" } });
+      if (!r.ok) { lastErr = "HTTP " + r.status; continue; }
+      const t = await r.text();
+      const data = LIT.parseSjrCsv(t, u.includes("year=") ? String(year) : "");
+      return Object.assign({ ok: true }, LIT.saveSjr(data));
+    } catch (e) { lastErr = (e && e.message) || String(e); }
+  }
+  return { ok: false, error: lastErr };
+});
+ipcMain.handle("sjr:import", async ev => {
+  const win = BrowserWindow.fromWebContents(ev.sender);
+  const r = await dialog.showOpenDialog(win, { title: "Pilih berkas SJR dari scimagojr.com", filters: [{ name: "CSV SCImago", extensions: ["csv", "txt", "xls"] }], properties: ["openFile"] });
+  if (r.canceled || !r.filePaths[0]) return { ok: false, error: "Dibatalkan." };
+  try {
+    const t = fs.readFileSync(r.filePaths[0], "utf8");
+    const y = (/(19|20)\d{2}/.exec(path.basename(r.filePaths[0])) || [""])[0];
+    return Object.assign({ ok: true }, LIT.saveSjr(LIT.parseSjrCsv(t, y)));
+  } catch (e) { return { ok: false, error: (e && e.message) || String(e) }; }
+});
+// Uji kunci penyedia AI tertentu (tanpa mengubah penyedia aktif).
+ipcMain.handle("ai:test", async (ev, id, draft) => {
+  try {
+    const def = PROVIDERS[id]; if (!def) throw { message: "Penyedia tidak dikenal." };
+    const s = readRaw(); const p = (s.providers || {})[id] || {};
+    const key = (draft && draft.key) || decKey(p.key);
+    if (!key) throw { message: "Isi API key dulu." };
+    const baseUrl = ((draft && draft.baseUrl) || p.baseUrl || def.baseUrl || "").replace(/\/+$/, "");
+    if (!baseUrl) throw { message: "Isi Base URL dulu." };
+    const models = Object.assign({}, def.models, p.models || {}, (draft && draft.models) || {});
+    const cfg = { id, def, key, baseUrl, format: (draft && draft.format) || p.format || def.format, models, maxTokens: 0, temperature: null };
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 60000);
+    const out = await chat(cfg, { messages: [{ role: "user", content: "Balas persis dengan kata: SIAP" }], tier: "quick", stream: false }, ctl.signal, () => {});
+    clearTimeout(t);
+    return { ok: true, text: out.text, model: out.model };
+  } catch (e) { return { ok: false, error: (e && e.message) || String(e) }; }
+});
 
 /* ───────────── Simpan berkas ───────────── */
 ipcMain.handle("file:save", async (ev, { filename, data, isText }) => {
@@ -260,6 +342,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  LIT.setSjrFile(path.join(app.getPath("userData"), "sjr.json"));
   protocol.handle("app", req => {
     const u = new URL(req.url);
     let rel = decodeURIComponent(u.pathname).replace(/^\/+/, "") || "index.html";

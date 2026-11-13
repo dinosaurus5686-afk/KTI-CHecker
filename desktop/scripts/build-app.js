@@ -67,8 +67,18 @@ patch(`bgApply(bgGet("kti.bg")||"hutan");`, `bgApply(bgGet("kti.bg")||"nor");`, 
 
 /* 6. Sumber literatur: OpenAlex / Crossref / Semantic Scholar menggantikan konektor */
 patch(`const SRC_DB = {scite:"Scite", consensus:"Consensus", scispace:"SciSpace"};`,
-  `const SRC_DB = {scite:"OpenAlex", consensus:"Crossref", scispace:"Semantic Scholar"};`, "srcdb");
-patch(`quartile:c.via==="consensus"?qLabel:""`, `quartile:""`, "quartile");
+  `const SRC_DB = window.__KTI_SRC_DB || {scite:"OpenAlex", consensus:"Crossref", scispace:"Semantic Scholar"};`, "srcdb");
+patch(`S.srcOpt || (S.srcOpt = {scite:true, consensus:true, scispace:true, q:2})`,
+  `S.srcOpt || (S.srcOpt = (window.__ktiSrcDefaults ? window.__ktiSrcDefaults() : {scite:true, consensus:true, scispace:true, q:2}))`, "srcopt");
+patch(`if (k==="scispace"){ (await scisSearch(questions[qi], nowY, signal)).forEach(p=>cand.push({...p, via:"scispace"})); }`,
+  `if (k==="scispace"){ (await scisSearch(questions[qi], nowY, signal)).forEach(p=>cand.push({...p, via:"scispace"})); }
+        if (!["scite","consensus","scispace"].includes(k) && window.__ktiLit){ (await window.__ktiLit(k, {q, question:questions[qi], nowY, maxQ:O.q}, signal)).forEach(p=>cand.push({...p, via:k})); }`, "extra-sources");
+patch(`quartile:c.via==="consensus"?qLabel:"", cites:c.cites, verif:h?"Scite":""`, `quartile:(h&&h.quartile)||c.quartile||"", cites:c.cites, verif:h?"OpenAlex":""`, "quartile");
+patch(`push(sciteToSource(h, {via:"scite", quartile:"", verif:"Scite"}))`, `push(sciteToSource(h, {via:"scite", quartile:h.quartile||"", verif:"OpenAlex"}))`, "quartile-scite");
+patch(`<span class="small muted">Kualitas jurnal (Consensus):</span>`, `<span class="small muted">Kualitas jurnal (kuartil SJR):</span>`, "q-label");
+patch(`<button aria-pressed="\${O.q==+v}" data-srcq="\${v}" \${on&&O.consensus?"":"disabled"}>`, `<button aria-pressed="\${O.q==+v}" data-srcq="\${v}" \${on?"":"disabled"}>`, "q-enable");
+patch(`(O.consensus?\` · filter Consensus: jurnal \${qLabel}\`:"")`, `\` · filter kuartil SJR: \${SRC_Q[O.q]} (jurnal tanpa data kuartil tetap disertakan)\``, "q-note");
+patch(`SUMBER TERVERIFIKASI (dari Scite/Consensus/SciSpace, metadata dicocokkan;`, `SUMBER TERVERIFIKASI (dari basis data literatur, metadata dicocokkan ke OpenAlex/Crossref;`, "prompt-src");
 
 /* 7. Google Drive tidak tersedia di desktop */
 patch(`if (c==="server_not_connected") return "Google Drive belum tersambung untuk akun ini. Sambungkan di claude.ai → Pengaturan → Konektor → Google Drive, lalu coba lagi.";`,

@@ -12,6 +12,17 @@ contextBridge.exposeInMainWorld("ktiDesktop", {
   info: () => ipcRenderer.invoke("app:info"),
   saveFile: (filename, data, isText) => ipcRenderer.invoke("file:save", { filename, data, isText }),
   reveal: p => ipcRenderer.invoke("file:reveal", p),
+  services: () => ipcRenderer.invoke("settings:services"),
+  testAI: (id, draft) => ipcRenderer.invoke("ai:test", id, draft),
+  lit: (id, args, draftKey) => {
+    const rid = "l" + (++seq) + "_" + Date.now();
+    const p = ipcRenderer.invoke("lit:search", rid, id, args, draftKey);
+    return { promise: p, abort: () => ipcRenderer.send("lit:abort", rid) };
+  },
+  sjrLookup: items => ipcRenderer.invoke("sjr:lookup", items),
+  sjrInfo: () => ipcRenderer.invoke("sjr:info"),
+  sjrDownload: () => ipcRenderer.invoke("sjr:download"),
+  sjrImport: () => ipcRenderer.invoke("sjr:import"),
   ai: (payload, onDelta) => {
     const id = "r" + (++seq) + "_" + Date.now();
     if (onDelta) listeners.set(id, onDelta);

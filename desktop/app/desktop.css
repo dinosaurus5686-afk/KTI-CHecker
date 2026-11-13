@@ -116,38 +116,57 @@ body{background:var(--scene-base)}
 /* Google Drive tidak tersedia di desktop */
 [data-gdopen]{display:none!important}
 
-/* ─────────── Dialog Pengaturan AI ─────────── */
-.nor-ov{position:fixed;inset:0;z-index:100;background:rgba(20,4,3,.62);display:grid;place-items:center;padding:20px}
+/* ─────────── Dialog Pengaturan (kartu gelap per kunci) ─────────── */
+.nor-ov{position:fixed;inset:0;z-index:100;background:rgba(12,3,2,.7);display:grid;place-items:center;padding:20px}
 .nor-ov[hidden]{display:none}
-.nor-dlg{width:min(760px,100%);max-height:calc(100vh - 40px);display:flex;flex-direction:column;background:var(--surface);color:var(--fg);border-radius:22px;overflow:hidden;box-shadow:0 40px 90px -30px rgba(0,0,0,.8);border:1px solid var(--glass-line)}
-.nor-dlg-h{display:flex;align-items:center;gap:14px;padding:18px 20px;background:linear-gradient(135deg,#1d0b0a,#3a1210);color:var(--nor-cream)}
-.nor-dlg-h img{width:92px;height:auto}
-.nor-dlg-h h2{font-size:20px;font-weight:800}
-.nor-dlg-h p{margin:2px 0 0;font-size:12.5px;color:#d9b9ab}
-.nor-dlg-h > div{flex:1;min-width:0}
-.nor-x{border:0;background:rgba(246,236,217,.1);color:var(--nor-cream);width:34px;height:34px;border-radius:50%;font-size:15px}
-.nor-provs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;padding:14px 20px 4px}
-.nor-prov{text-align:left;border:1px solid var(--line);background:var(--surface-2);border-radius:14px;padding:10px 12px;color:var(--fg)}
-.nor-prov b{display:block;font-size:13px}
-.nor-prov small{color:var(--muted);font-size:11px}
-.nor-prov.on{border-color:var(--nor-red);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--nor-red)}
-.nor-body{padding:12px 20px 4px;overflow:auto;display:flex;flex-direction:column;gap:12px}
-.nor-note{margin:0;font-size:12.5px;color:var(--muted);background:var(--surface-2);border-left:4px solid var(--nor-red);padding:9px 12px;border-radius:8px}
-.nor-f{display:flex;flex-direction:column;gap:5px;font-size:12.5px}
-.nor-f > span{font-weight:700;display:flex;flex-wrap:wrap;gap:8px;align-items:baseline}
-.nor-f em{font-style:normal;font-weight:500;color:var(--faint);font-size:11.5px}
-.nor-f a{font-weight:600;color:var(--accent);font-size:12px}
-.nor-f input,.nor-f select{width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--glass-strong);color:var(--fg);font-size:13px;font-family:var(--mono)}
-.nor-row{display:flex;gap:6px}
-.nor-row input{flex:1;min-width:0}
-.nor-models{border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px}
-.nor-models-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.nor-adv summary{cursor:pointer;font-weight:700;font-size:12.5px;color:var(--accent)}
-.nor-adv[open]{display:flex;flex-direction:column;gap:10px}
-.nor-msg{font-size:12.5px;padding:9px 12px;border-radius:10px}
-.nor-msg.ok{background:var(--ok-soft);color:var(--ok)}
-.nor-msg.err{background:var(--err-soft);color:var(--err)}
-.nor-dlg-f{display:flex;gap:8px;padding:14px 20px;border-top:1px solid var(--line);background:var(--surface-2)}
+.nk-dlg{width:min(820px,100%);max-height:calc(100vh - 40px);display:flex;flex-direction:column;background:#160b0a;color:#f3e7d6;border-radius:22px;overflow:hidden;box-shadow:0 40px 90px -30px rgba(0,0,0,.9);border:1px solid rgba(246,236,217,.10);font-family:var(--font)}
+.nk-head{display:flex;align-items:center;gap:14px;padding:18px 22px;background:linear-gradient(135deg,#2a0f0d,#4a1512)}
+.nk-head img{width:88px;height:auto}
+.nk-head > div{flex:1;min-width:0}
+.nk-head h2{font-size:20px;font-weight:800;color:#fff7ea}
+.nk-head p{margin:2px 0 0;font-size:12.5px;color:#d9b9ab}
+.nk-x{border:0;background:rgba(246,236,217,.1);color:#f6ecd9;width:34px;height:34px;border-radius:50%;font-size:15px;cursor:pointer}
+.nk-tabs{display:flex;gap:6px;padding:12px 22px 0;background:#160b0a;border-bottom:1px solid rgba(246,236,217,.08)}
+.nk-tabs button{border:0;background:transparent;color:#cdb3a6;font-weight:700;font-size:13.5px;padding:10px 14px;border-radius:12px 12px 0 0;cursor:pointer}
+.nk-tabs button[aria-selected="true"]{background:#24130f;color:#fff3e0;box-shadow:inset 0 -3px 0 #d9a75a}
+.nk-body{padding:18px 22px 22px;overflow:auto;display:flex;flex-direction:column;gap:14px}
+.nk-intro{margin:0;font-size:12.5px;color:#cdb3a6;line-height:1.55}
+.nk-card{background:#24130f;border:1px solid rgba(246,236,217,.09);border-radius:18px;padding:16px 18px;display:flex;flex-direction:column;gap:8px}
+.nk-card.hero{border-color:rgba(217,167,90,.45);background:linear-gradient(160deg,#2c1712,#24130f)}
+.nk-card.active{border-color:rgba(217,167,90,.55)}
+.nk-card h3{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:17px;font-weight:800;color:#fff3e0;margin:0}
+.nk-desc{margin:0;font-size:12.8px;color:#cbb8aa;line-height:1.55}
+.nk-lab{font-size:12.5px;font-weight:700;color:#e7d6c4;margin-top:4px;display:flex;flex-wrap:wrap;gap:8px;align-items:baseline}
+.nk-lab em{font-style:normal;font-weight:500;color:#9f877a;font-size:11.5px}
+.nk-row{display:flex;gap:8px}
+.nk-row input{flex:1;min-width:0}
+.nk-key,.nk-in{width:100%;padding:11px 14px;border:1px solid rgba(246,236,217,.12);border-radius:12px;background:#140a09;color:#f6ecd9;font-size:13.5px;font-family:var(--mono);outline:none}
+.nk-key:focus,.nk-in:focus{border-color:#d9a75a;box-shadow:0 0 0 3px rgba(217,167,90,.18)}
+select.nk-in{font-family:var(--font)}
+.nk-eye{width:46px;flex:none;border:1px solid rgba(246,236,217,.12);border-radius:12px;background:#1b0f0d;color:#f6ecd9;font-size:15px;cursor:pointer}
+.nk-acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:4px}
+.nk-btn{display:inline-flex;align-items:center;gap:6px;padding:10px 16px;border-radius:12px;border:1px solid rgba(246,236,217,.12);background:#1b0f0d;color:#fff3e0;font-weight:700;font-size:13.5px;cursor:pointer}
+.nk-btn:hover{border-color:rgba(246,236,217,.28)}
+.nk-btn.gold{background:linear-gradient(180deg,#e2b46a,#a8722f);border-color:transparent;color:#1c0f05}
+.nk-btn.ghost{background:transparent;color:#d9b9ab}
+.nk-btn[disabled]{opacity:.6;cursor:progress}
+.nk-hint{font-size:11.5px;color:#9f877a}
+.nk-msg{font-size:12.5px;border-radius:10px;padding:0}
+.nk-msg.ok,.nk-msg.err{padding:8px 12px}
+.nk-msg.ok{background:rgba(90,209,127,.12);color:#8fe0a7}
+.nk-msg.err{background:rgba(255,91,79,.12);color:#ff9d93}
+.nk-st{font-size:11.5px;font-weight:600;color:#9f877a}
+.nk-st.ok{color:#8fe0a7}
+.nk-st.on{background:#d9a75a;color:#1c0f05;padding:2px 8px;border-radius:99px;font-weight:800}
+.nk-badge{font-size:11px;font-weight:800;padding:2px 9px;border-radius:99px;letter-spacing:.02em}
+.nk-badge.free{background:rgba(90,209,127,.16);color:#8fe0a7}
+.nk-badge.mixed{background:rgba(217,167,90,.18);color:#e8c27f}
+.nk-badge.paid{background:rgba(255,120,100,.14);color:#ffab9e}
+.nk-switch{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#f3e7d6;cursor:pointer}
+.nk-switch input{width:18px;height:18px;accent-color:#d9a75a}
+.nk-guide summary{cursor:pointer;font-weight:800;font-size:13.5px;color:#fff3e0;padding:4px 0}
+.nk-guide ol{margin:6px 0 6px;padding-left:20px;font-size:12.8px;color:#d6c3b4;line-height:1.6}
+.nk-guide a{font-size:12.5px;font-weight:700;color:#e8c27f}
 .nor-notice{border-left:5px solid var(--nor-red)}
 
 @media (max-width: 760px){ .nor-brand .nor-logo{width:110px} }

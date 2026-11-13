@@ -7,8 +7,22 @@
   const D = window.ktiDesktop;
   if (!D) { console.warn("ktiDesktop tidak tersedia: bridge.js hanya berjalan di aplikasi desktop."); return; }
 
-  let SETTINGS = null, PROVIDERS = null;
-  const ready = Promise.all([D.getSettings(), D.providers()]).then(([s, p]) => { SETTINGS = s; PROVIDERS = p; updateBadge(); });
+  let SETTINGS = null, PROVIDERS = null, SERVICES = null, SJR_INFO = "";
+  // Basis data literatur yang tampil di aplikasi (kunci = slot di KTI Checker, nilai = label).
+  const SRC_DB = window.__KTI_SRC_DB = { scite: "OpenAlex", consensus: "Crossref", scispace: "Semantic Scholar" };
+  const SLOT_TO_SVC = {};
+  const ready = Promise.all([D.getSettings(), D.providers(), D.services(), D.sjrInfo()]).then(([s, p, sv, sj]) => { SETTINGS = s; PROVIDERS = p; SERVICES = sv; setSjrInfo(sj); syncSrcDb(); updateBadge(); });
+  function setSjrInfo(sj) { SJR_INFO = sj ? `${sj.count.toLocaleString("id-ID")} jurnal SCImago${sj.year ? " (" + sj.year + ")" : ""} tersimpan di laptop ini.` : ""; }
+  function svcUsable(id) { const d = SERVICES[id], st = SETTINGS.services[id]; return st && st.enabled && (d.key !== "required" || st.hasKey || (id === "perplexity" && SETTINGS.providers.perplexity && SETTINGS.providers.perplexity.hasKey)); }
+  function syncSrcDb() {
+    if (!SERVICES || !SETTINGS) return;
+    for (const [id, d] of Object.entries(SERVICES)) {
+      SLOT_TO_SVC[d.slot] = id;
+      if (svcUsable(id)) SRC_DB[d.slot] = d.srcLabel || d.label; else if (!["scite", "consensus", "scispace"].includes(d.slot)) delete SRC_DB[d.slot];
+    }
+    try { if (typeof S !== "undefined" && S.srcOpt) for (const k of Object.keys(SRC_DB)) if (S.srcOpt[k] === undefined) S.srcOpt[k] = true; } catch (e) {}
+  }
+  window.__ktiSrcDefaults = () => { const o = { q: 2 }; Object.keys(SRC_DB).forEach(k => { o[k] = SERVICES ? svcUsable(SLOT_TO_SVC[k] || k) || ["scite", "consensus", "scispace"].includes(k) : true; }); return o; };
 
   const configured = () => {
     if (!SETTINGS) return false;
@@ -141,105 +155,71 @@
     }
   };
 
-  /* ─────────── Literatur: OpenAlex, Crossref, Semantic Scholar ─────────── */
-  async function getJSON(url, signal) {
-    for (let i = 0; i < 3; i++) {
-      const r = await fetch(url, { signal }).catch(e => { if (signal && signal.aborted) throw { code: "cancelled" }; throw { code: "network", message: String(e) }; });
-      if (r.status === 429 && i < 2) { await sleep(1500 * (i + 1), signal); continue; }
-      if (!r.ok) throw { code: r.status === 429 ? "rate_limited" : "http_" + r.status, message: "HTTP " + r.status };
-      return r.json();
-    }
-  }
-  const absFromInv = inv => {
-    if (!inv) return "";
-    const arr = [];
-    for (const [w, pos] of Object.entries(inv)) for (const p of pos) arr[p] = w;
-    return arr.filter(Boolean).join(" ");
-  };
-  const oaToHit = w => ({
-    doi: String(w.doi || "").replace(/^https?:\/\/(dx\.)?doi\.org\//i, ""),
-    title: w.title || w.display_name || "",
-    authors: (w.authorships || []).map(a => ({ authorName: (a.author && a.author.display_name) || "" })).filter(a => a.authorName),
-    year: w.publication_year || null,
-    journal: (w.primary_location && w.primary_location.source && w.primary_location.source.display_name) || "",
-    volume: (w.biblio && w.biblio.volume) || "",
-    issue: (w.biblio && w.biblio.issue) || "",
-    page: w.biblio && w.biblio.first_page ? (w.biblio.first_page + (w.biblio.last_page && w.biblio.last_page !== w.biblio.first_page ? "–" + w.biblio.last_page : "")) : "",
-    abstract: absFromInv(w.abstract_inverted_index).slice(0, 1200),
-    citedBy: w.cited_by_count || 0,
-    editorialNotices: w.is_retracted ? [{ status: "Retracted" }] : []
-  });
-  const OA = "https://api.openalex.org/works";
-  const oaSel = "&select=doi,title,display_name,authorships,publication_year,primary_location,biblio,abstract_inverted_index,cited_by_count,is_retracted,type";
-  async function openAlex(args, signal) {
-    if (Array.isArray(args.titles) && args.titles.length) {
-      const hits = [];
-      await Promise.all(args.titles.map(async t => {
-        const q = String(t).replace(/[,:|!*()"]/g, " ").replace(/\s+/g, " ").trim().slice(0, 250);
-        if (!q) return;
-        try {
-          const j = await getJSON(`${OA}?filter=title.search:${encodeURIComponent(q)}&per-page=2${oaSel}`, signal);
-          (j.results || []).forEach(w => hits.push(oaToHit(w)));
-        } catch (e) { if (e && e.code === "cancelled") throw e; }
-      }));
-      return { hits };
-    }
-    const term = String(args.term || args.query || "").replace(/\bAND\b|\bOR\b/g, " ").replace(/"/g, "").replace(/\s+/g, " ").trim();
-    const f = ["type:article|review"]; if (args.date_from) f.push("from_publication_date:" + String(args.date_from).slice(0, 4) + "-01-01");
-    const j = await getJSON(`${OA}?search=${encodeURIComponent(term)}&filter=${f.join(",")}&per-page=${Math.min(25, args.limit || 6)}${oaSel}`, signal);
-    return { hits: (j.results || []).map(oaToHit) };
-  }
-  async function crossref(args, signal) {
-    const q = String(args.query || "").slice(0, 300);
-    let url = `https://api.crossref.org/works?query.bibliographic=${encodeURIComponent(q)}&rows=8&filter=type:journal-article${args.year_min ? ",from-pub-date:" + args.year_min : ""}&select=DOI,title,author,container-title,issued,volume,issue,page,abstract,is-referenced-by-count,type`;
-    const j = await getJSON(url, signal);
-    const items = (j.message && j.message.items) || [];
-    return {
-      papers: items.map(it => ({
-        title: (it.title || [])[0] || "",
-        authors: (it.author || []).map(a => [a.given, a.family].filter(Boolean).join(" ") || a.name || "").filter(Boolean),
-        year: it.issued && it.issued["date-parts"] && it.issued["date-parts"][0] ? it.issued["date-parts"][0][0] : null,
-        journal: (it["container-title"] || [])[0] || "",
-        volume: it.volume || "", issue: it.issue || "", page: it.page || "",
-        doi: it.DOI || "",
-        abstract: String(it.abstract || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(),
-        citations: it["is-referenced-by-count"] || 0,
-        publication_type: "journal-article"
-      })).filter(p => p.title)
-    };
-  }
-  async function semanticScholar(args, signal) {
-    const q = String(args.searchQuestion || args.query || "").slice(0, 400);
+  /* ─────────── Literatur (semua lewat proses utama) ─────────── */
+  async function lit(id, args, signal) {
+    const h = D.lit(id, args);
+    const onAbort = () => h.abort();
+    if (signal) { if (signal.aborted) throw { code: "cancelled" }; signal.addEventListener("abort", onAbort, { once: true }); }
     try {
-      const j = await getJSON(`https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(q)}&limit=8&fields=title,year,authors,venue,journal,externalIds,abstract,publicationTypes,citationCount`, signal);
-      return {
-        data: (j.data || []).map(p => ({
-          title: p.title, authors: (p.authors || []).map(a => a.name), year: p.year,
-          journal: (p.journal && p.journal.name) || p.venue || "",
-          volume: (p.journal && p.journal.volume) || "", page: (p.journal && p.journal.pages || "").trim(),
-          doi: (p.externalIds && p.externalIds.DOI) || "", abstract: p.abstract || "",
-          publication_type: (p.publicationTypes || []).join(" ") || "JournalArticle"
-        }))
-      };
-    } catch (e) {
-      if (e && e.code === "cancelled") throw e;
-      // Semantic Scholar tanpa kunci sering membatasi; pakai OpenAlex sebagai cadangan.
-      const r = await openAlex({ term: q.split(/\s+/).slice(0, 12).join(" "), limit: 8 }, signal);
-      return { data: r.hits.map(h => ({ title: h.title, authors: h.authors.map(a => a.authorName), year: h.year, journal: h.journal, volume: h.volume, issue: h.issue, page: h.page, doi: h.doi, abstract: h.abstract, publication_type: "JournalArticle" })) };
-    }
+      const r = await h.promise;
+      if (!r.ok) throw r.error || { code: "error" };
+      return (r.data && r.data.papers) || [];
+    } finally { if (signal) signal.removeEventListener("abort", onAbort); }
   }
+  // Tambahkan label kuartil SJR dan buang jurnal di bawah batas kuartil yang dipilih (bila datanya ada).
+  async function withQuartile(papers) {
+    if (!papers.length) return papers;
+    let qs = []; try { qs = await D.sjrLookup(papers.map(p => ({ issn: p.issn || [], journal: p.journal || "" }))); } catch (e) {}
+    const maxQ = (() => { try { return (S.srcOpt && S.srcOpt.q) || 4; } catch (e) { return 4; } })();
+    return papers.map((p, i) => { const q = qs[i]; if (q) { p.qn = +q.q.slice(1); p.quartile = `SJR ${q.q}${q.year ? " " + q.year : ""}`; } return p; })
+      .filter(p => !p.qn || p.qn <= maxQ);
+  }
+  const toHit = p => ({ doi: p.doi, title: p.title, authors: (p.authors || []).map(a => ({ authorName: a })), year: p.year, journal: p.journal, volume: p.volume, issue: p.issue, page: p.page, abstract: p.abstract, quartile: p.quartile || "", editorialNotices: p.retracted ? [{ status: "Retracted" }] : [] });
+  const toCand = p => ({ title: p.title, authors: p.authors || [], authorsText: (p.authors || []).join(", "), year: p.year, journal: p.journal, volume: p.volume || "", issue: p.issue || "", page: p.page || "", doi: p.doi || "", url: p.url || "", abstract: String(p.abstract || "").slice(0, 420), ptype: p.ptype || "", capped: false, cites: p.cites || null, quartile: p.quartile || "" });
+
+  // Pencarian sumber tambahan (Google Scholar, CORE, Scite, Consensus, SciSpace, Perplexity) untuk KTI Checker.
+  window.__ktiLit = async function (slot, o, signal) {
+    const id = SLOT_TO_SVC[slot]; if (!id) return [];
+    let ps = await lit(id, { q: o.q, question: o.question, yearFrom: o.nowY - 10, limit: 10, sjrMax: o.maxQ }, signal);
+    ps = ps.filter(p => !p.retracted && (!p.year || p.year >= o.nowY - 10));
+    // Kandidat tanpa DOI (Scholar, Perplexity, SciSpace) dilengkapi lewat DOI di URL bila ada; sisanya diverifikasi judul oleh KTI Checker.
+    const withDoi = ps.filter(p => p.doi && (!p.authors.length || !p.journal));
+    if (withDoi.length) {
+      try {
+        const full = await lit("openalex", { dois: withDoi.map(p => p.doi) }, signal);
+        const m = new Map(full.map(f => [String(f.doi).toLowerCase(), f]));
+        ps = ps.map(p => { const f = p.doi && m.get(p.doi.toLowerCase()); return f ? Object.assign({}, f, { cites: p.cites || f.cites }) : p; }).filter(p => !p.retracted);
+      } catch (e) { if (e && e.code === "cancelled") throw e; }
+    }
+    return (await withQuartile(ps)).map(toCand);
+  };
+
   const mcp = {
     async describeTool(server, tool) {
       if (server === "SciSpace") return { inputSchema: { type: "object", properties: { searchQuestion: { type: "string" } }, required: ["searchQuestion"] } };
       return { inputSchema: { type: "object", properties: {} } };
     },
     async callTool(server, tool, args, opts) {
-      const signal = opts && opts.signal;
-      args = args || {};
+      const signal = opts && opts.signal; args = args || {};
       try {
-        if (server === "Scite" && tool === "search_literature") return { payload: await openAlex(args, signal) };
-        if (server === "Consensus" && tool === "search") return { payload: await crossref(args, signal) };
-        if (server === "SciSpace") return { payload: await semanticScholar(args, signal) };
+        if (server === "Scite" && tool === "search_literature") {
+          let ps;
+          const a = Array.isArray(args.titles) ? { titles: args.titles } : { q: args.term || args.query || "", yearFrom: args.date_from ? +String(args.date_from).slice(0, 4) : null, limit: args.limit || 6 };
+          try { ps = await lit("openalex", a, signal); }
+          catch (e) { if (e && e.code === "cancelled") throw e; ps = await lit("crossref", a, signal); } // cadangan bila jatah OpenAlex habis
+          return { payload: { hits: (await withQuartile(ps)).map(toHit) } };
+        }
+        if (server === "Consensus" && tool === "search") {
+          const ps = await withQuartile(await lit("crossref", { q: args.query, yearFrom: args.year_min, limit: 10 }, signal));
+          return { payload: { papers: ps.map(p => Object.assign(toCand(p), { publication_type: "journal-article" })) } };
+        }
+        if (server === "SciSpace") {
+          const q = args.searchQuestion || args.query || "";
+          let ps;
+          try { ps = await lit("semanticscholar", { question: q, limit: 8 }, signal); }
+          catch (e) { if (e && e.code === "cancelled") throw e; ps = await lit("openalex", { q: q.split(/\s+/).slice(0, 12).join(" "), limit: 8 }, signal); }
+          return { payload: { data: (await withQuartile(ps)).map(p => Object.assign(toCand(p), { publication_type: p.ptype || "JournalArticle" })) } };
+        }
       } catch (e) {
         if (signal && signal.aborted) throw { code: "cancelled" };
         throw e && e.code ? e : { code: "network", message: String(e) };
@@ -284,115 +264,203 @@
     dot.title = lastStatus && !lastStatus.ok ? (lastStatus.msg || "") : "Siap";
   }
 
-  /* ─────────── Layar Pengaturan AI ─────────── */
+  /* ─────────── Layar Pengaturan (kartu per kunci) ─────────── */
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  let draft = null;
+  let TAB = "ai";
+  const UI = { modelList: {} };
 
-  function openSettings() {
-    if (!SETTINGS) return ready.then(openSettings);
-    draft = JSON.parse(JSON.stringify(SETTINGS));
-    draft.keys = {};
+  function badge(free) {
+    if (!free) return "";
+    const cls = /^gratis/i.test(free) ? "free" : /gratis/i.test(free) ? "mixed" : "paid";
+    return `<span class="nk-badge ${cls}">${esc(free)}</span>`;
+  }
+  function guideBlock(d) {
+    if (!d.guide || !d.guide.length) return "";
+    const gratis = /gratis/i.test(d.free || "") ? " (gratis)" : "";
+    return `<details class="nk-guide"><summary>Cara mendapatkan API key${gratis}</summary><ol>${d.guide.map(g => `<li>${esc(g)}</li>`).join("")}</ol>${d.keyUrl ? `<a href="${esc(d.keyUrl)}" target="_blank" rel="noopener">Buka ${esc(new URL(d.keyUrl).host)} ↗</a>` : ""}</details>`;
+  }
+  function keyCard(kind, id) {
+    const isAI = kind === "ai";
+    const d = isAI ? PROVIDERS[id] : SERVICES[id];
+    const st = isAI ? SETTINGS.providers[id] : SETTINGS.services[id];
+    const needsKey = isAI ? true : d.key !== "none";
+    const active = isAI && SETTINGS.provider === id;
+    const title = isAI ? `🔑 API key ${esc(d.short || d.label)}` : `${esc(d.icon || "📚")} ${esc(d.label)}`;
+    const status = needsKey ? (st.hasKey ? `<span class="nk-st ok">✓ tersimpan (${esc(st.keyHint)})</span>` : (!isAI && d.key === "optional" ? `<span class="nk-st">kunci opsional</span>` : `<span class="nk-st">belum ada kunci</span>`)) : `<span class="nk-st ok">tanpa kunci</span>`;
+    return `<section class="nk-card ${active ? "active" : ""}" data-card="${kind}:${id}">
+      <h3>${title} ${badge(d.free)} ${active ? `<span class="nk-st on">dipakai</span>` : ""}</h3>
+      <p class="nk-desc">${esc(d.desc || d.note || "")}</p>
+      ${!isAI ? `<label class="nk-switch"><input type="checkbox" data-en="${id}" ${st.enabled ? "checked" : ""} ${needsKey && d.key !== "optional" && !st.hasKey ? "disabled" : ""}><span>Pakai saat mencari literatur</span></label>` : ""}
+      ${needsKey ? `<label class="nk-lab">${esc(d.keyLabel || "API key")} ${status}</label>
+      <div class="nk-row"><input type="password" class="nk-key" autocomplete="off" spellcheck="false" placeholder="${st.hasKey ? "•••••••••••••••• (tempel kunci baru untuk mengganti)" : "Tempel " + esc(d.keyHint || "API key")}"><button type="button" class="nk-eye" data-act="eye" title="Tampilkan/sembunyikan">👁</button></div>` : status}
+      ${isAI && id === "custom" ? `<label class="nk-lab">Base URL</label><input class="nk-in nk-base" value="${esc(st.baseUrl || "")}" placeholder="https://…/v1"><label class="nk-lab">Format API</label><select class="nk-in nk-fmt"><option value="openai" ${st.format !== "anthropic" ? "selected" : ""}>OpenAI Chat Completions</option><option value="anthropic" ${st.format === "anthropic" ? "selected" : ""}>Anthropic Messages</option></select>` : ""}
+      ${!isAI && d.extra ? d.extra.map(x => `<label class="nk-lab">${esc(x.label)}</label><input class="nk-in" data-extra="${esc(x.id)}" value="${esc((st.extra || {})[x.id] || "")}" placeholder="${esc(x.placeholder || "")}">`).join("") : ""}
+      <div class="nk-acts">${needsKey || (!isAI && d.extra) ? `<button type="button" class="nk-btn gold" data-act="save">💾 Simpan</button>` : ""}<button type="button" class="nk-btn" data-act="test">🧪 Tes ${needsKey ? "kunci" : "koneksi"}</button>${isAI && !active && st.hasKey ? `<button type="button" class="nk-btn" data-act="use">⭐ Jadikan AI utama</button>` : ""}${needsKey && st.hasKey ? `<button type="button" class="nk-btn ghost" data-act="del">Hapus kunci</button>` : ""}</div>
+      <div class="nk-msg" aria-live="polite"></div>
+      ${guideBlock(d)}
+    </section>`;
+  }
+  function activeCard() {
+    const id = SETTINGS.provider, def = PROVIDERS[id], p = SETTINGS.providers[id] || {};
+    const m = Object.assign({}, def.models, p.models || {});
+    const list = UI.modelList[id] || p.modelList || [];
+    const tier = (k, label, hint) => `<label class="nk-lab">${label} <em>${hint}</em></label><input class="nk-in" list="nkModels" data-model="${k}" value="${esc(m[k] || "")}">`;
+    return `<section class="nk-card hero" data-card="active">
+      <h3>🤖 AI yang dipakai</h3>
+      <p class="nk-desc">Penyedia ini dipakai untuk review reviewer, revisi, grammar, terjemahan, copyedit, dan Tanya Pembimbing.</p>
+      <label class="nk-lab">Penyedia</label>
+      <select class="nk-in" id="nkProv">${Object.entries(PROVIDERS).map(([k, d]) => `<option value="${k}" ${k === id ? "selected" : ""}>${esc(d.label)}${SETTINGS.providers[k].hasKey ? " ✓" : " (belum ada kunci)"}</option>`).join("")}</select>
+      ${tier("quick", "Model cepat", "kueri sumber, tugas ringan")}
+      ${tier("default", "Model standar", "review, grammar, profil reviewer")}
+      ${tier("complex", "Model teliti", "mode teliti, copyedit; pilih model terkuat")}
+      ${list.length ? `<datalist id="nkModels">${list.map(x => `<option value="${esc(x)}">`).join("")}</datalist>` : ""}
+      <div class="nk-acts"><button type="button" class="nk-btn gold" data-act="saveActive">💾 Simpan</button><button type="button" class="nk-btn" data-act="models">📋 Muat daftar model</button><button type="button" class="nk-btn" data-act="testActive">🧪 Tes</button>${list.length ? `<span class="nk-hint">${list.length} model tersedia; ketik untuk mencari</span>` : ""}</div>
+      <div class="nk-msg" aria-live="polite"></div>
+    </section>`;
+  }
+  function sjrCard() {
+    return `<section class="nk-card" data-card="sjr"><h3>🏅 Kuartil jurnal (SCImago SJR) ${badge("Gratis")}</h3>
+      <p class="nk-desc">Label Q1–Q4 dan filter "Kualitas jurnal" memakai peringkat SCImago (data Scopus). Data disimpan di laptop agar pencocokan cepat dan bisa luring.</p>
+      <p class="nk-desc"><b>${SJR_INFO ? "✓ " + esc(SJR_INFO) : "Belum ada data kuartil."}</b></p>
+      <div class="nk-acts"><button type="button" class="nk-btn gold" data-act="sjrDl">⬇️ ${SJR_INFO ? "Perbarui" : "Unduh"} data SJR</button><button type="button" class="nk-btn" data-act="sjrImp">📄 Impor berkas SJR</button></div>
+      <div class="nk-msg" aria-live="polite"></div>
+      <details class="nk-guide"><summary>Bila unduhan otomatis gagal</summary><ol><li>Buka scimagojr.com/journalrank.php di browser.</li><li>Klik tombol <b>Download data</b> di kanan atas tabel (berkas .csv).</li><li>Kembali ke sini, klik <b>Impor berkas SJR</b>, lalu pilih berkas tersebut.</li></ol><a href="https://www.scimagojr.com/journalrank.php" target="_blank" rel="noopener">Buka scimagojr.com ↗</a></details></section>`;
+  }
+  function advCard() {
+    return `<section class="nk-card" data-card="adv"><h3>⚙️ Lanjutan</h3>
+      <label class="nk-lab">Batas token keluaran <em>kosong = bawaan penyedia (Anthropic 16000). Naikkan bila review terpotong.</em></label><input class="nk-in" id="nkMax" inputmode="numeric" value="${esc(SETTINGS.maxTokens || "")}" placeholder="mis. 32000">
+      <label class="nk-lab">Temperatur <em>kosong = bawaan model; 0–0.3 untuk penilaian yang konsisten</em></label><input class="nk-in" id="nkTemp" inputmode="decimal" value="${esc(SETTINGS.temperature || "")}" placeholder="mis. 0.2">
+      <div class="nk-acts"><button type="button" class="nk-btn gold" data-act="saveAdv">💾 Simpan</button></div><div class="nk-msg"></div></section>`;
+  }
+  function renderSettings() {
+    const ov = document.getElementById("norSettings");
+    const tabs = [["ai", "🤖 Penyedia AI"], ["lit", "📚 Sumber literatur"], ["adv", "⚙️ Lanjutan"]];
+    let body = "";
+    if (TAB === "ai") body = activeCard() + Object.keys(PROVIDERS).map(id => keyCard("ai", id)).join("");
+    else if (TAB === "lit") body = `<p class="nk-intro">Sumber yang diaktifkan dicari bersamaan saat <b>Revisi naskah</b> dan <b>Revisi instan</b>. Setiap kandidat dicocokkan ulang ke OpenAlex/Crossref (DOI, penulis, status penarikan) sebelum boleh dikutip, dan diberi label kuartil SJR bila jurnalnya terindeks Scopus.</p>` + sjrCard() + Object.keys(SERVICES).map(id => keyCard("lit", id)).join("");
+    else body = advCard();
+    ov.innerHTML = `<div class="nk-dlg" role="dialog" aria-modal="true" aria-labelledby="nkT">
+      <div class="nk-head"><img src="logo-mark.png" alt=""><div><h2 id="nkT">Pengaturan</h2><p>Kunci hanya disimpan (terenkripsi) di laptop ini dan dikirim langsung ke layanan terkait.</p></div><button class="nk-x" type="button" data-act="close" aria-label="Tutup">✕</button></div>
+      <div class="nk-tabs" role="tablist">${tabs.map(([k, l]) => `<button type="button" role="tab" aria-selected="${k === TAB}" data-tab="${k}">${l}</button>`).join("")}</div>
+      <div class="nk-body">${body}</div></div>`;
+  }
+  function openSettings(tab) {
+    if (!SETTINGS || !SERVICES) return ready.then(() => openSettings(tab));
+    if (typeof tab === "string") TAB = tab;
     let ov = document.getElementById("norSettings");
     if (!ov) { ov = document.createElement("div"); ov.id = "norSettings"; ov.className = "nor-ov"; document.body.appendChild(ov); }
-    renderSettings();
-    ov.hidden = false;
+    renderSettings(); ov.hidden = false;
     document.addEventListener("keydown", escClose);
   }
   function escClose(e) { if (e.key === "Escape") closeSettings(); }
   function closeSettings() { const ov = document.getElementById("norSettings"); if (ov) ov.hidden = true; document.removeEventListener("keydown", escClose); }
+  function cardMsg(card, ok, text) { const m = card.querySelector(".nk-msg"); if (m) { m.className = "nk-msg " + (ok ? "ok" : "err"); m.textContent = text; } }
+  function rerenderCard(card, msg) {
+    const [kind, id] = card.dataset.card.split(":");
+    const html = kind === "ai" ? keyCard("ai", id) : kind === "lit" ? keyCard("lit", id) : kind === "active" ? activeCard() : kind === "sjr" ? sjrCard() : advCard();
+    const t = document.createElement("div"); t.innerHTML = html; const nc = t.firstElementChild;
+    card.replaceWith(nc); if (msg) cardMsg(nc, msg.ok, msg.text); return nc;
+  }
+  async function savePatch(patch) { SETTINGS = await D.saveSettings(patch); syncSrcDb(); applyToApp(); updateBadge(); }
 
-  function renderSettings(msg) {
-    const ov = document.getElementById("norSettings");
-    const id = draft.provider, def = PROVIDERS[id], p = draft.providers[id];
-    const m = Object.assign({}, def.models, p.models || {});
-    const list = p.modelList || [];
-    const dl = list.length ? `<datalist id="norModels">${list.map(x => `<option value="${esc(x)}">`).join("")}</datalist>` : "";
-    const tier = (k, label, hint) => `<label class="nor-f"><span>${label}<em>${hint}</em></span><input list="norModels" data-model="${k}" value="${esc(m[k] || "")}" placeholder="nama model"></label>`;
-    ov.innerHTML = `<div class="nor-dlg" role="dialog" aria-modal="true" aria-labelledby="norSetT">
-      <div class="nor-dlg-h"><img src="logo-mark.png" alt=""><div><h2 id="norSetT">Pengaturan AI</h2><p>Pilih penyedia dan tempel API key Anda. Kunci disimpan terenkripsi di laptop ini saja.</p></div><button class="nor-x" type="button" data-nor="close" aria-label="Tutup">✕</button></div>
-      <div class="nor-provs">${Object.entries(PROVIDERS).map(([k, d]) => `<button type="button" class="nor-prov ${k === id ? "on" : ""}" data-prov="${k}"><b>${esc(d.label)}</b><small>${draft.providers[k].hasKey || draft.keys[k] ? "✓ kunci tersimpan" : "belum ada kunci"}</small></button>`).join("")}</div>
-      <div class="nor-body">
-        ${def.note ? `<p class="nor-note">${esc(def.note)}</p>` : ""}
-        <label class="nor-f"><span>API key ${def.keyUrl ? `<a href="${esc(def.keyUrl)}" target="_blank" rel="noopener">Ambil kunci di ${esc(new URL(def.keyUrl).host)} ↗</a>` : ""}</span>
-          <div class="nor-row"><input type="password" id="norKey" autocomplete="off" spellcheck="false" placeholder="${p.hasKey ? "Tersimpan (" + esc(p.keyHint) + "). Tempel kunci baru untuk mengganti." : "Tempel API key " + esc(def.keyHint || "")}" value="${esc(draft.keys[id] || "")}">
-          <button type="button" class="btn sm" data-nor="peek">Lihat</button>${p.hasKey ? `<button type="button" class="btn sm" data-nor="delkey">Hapus</button>` : ""}</div></label>
-        <label class="nor-f"><span>Base URL<em>${id === "custom" ? "wajib, mis. https://api.deepseek.com/v1" : "biarkan kosong untuk bawaan"}</em></span><input id="norBase" value="${esc(p.baseUrl || "")}" placeholder="${esc(def.baseUrl || "https://…/v1")}"></label>
-        ${id === "custom" ? `<label class="nor-f"><span>Format API</span><select id="norFmt"><option value="openai" ${p.format !== "anthropic" ? "selected" : ""}>OpenAI Chat Completions</option><option value="anthropic" ${p.format === "anthropic" ? "selected" : ""}>Anthropic Messages</option></select></label>` : ""}
-        <div class="nor-models"><div class="nor-models-h"><b>Model</b><button type="button" class="btn sm" data-nor="models">Muat daftar model</button>${list.length ? `<span class="small muted">${list.length} model tersedia, ketik untuk mencari</span>` : ""}</div>
-          ${tier("quick", "Cepat", "kueri sumber, tugas ringan")}
-          ${tier("default", "Standar", "review, grammar, profil reviewer")}
-          ${tier("complex", "Teliti", "mode teliti, copyedit artikel")}
-          ${dl}
-        </div>
-        <details class="nor-adv"><summary>Lanjutan</summary>
-          <label class="nor-f"><span>Batas token keluaran<em>kosong = bawaan penyedia (Anthropic: 16000)</em></span><input id="norMax" inputmode="numeric" value="${esc(draft.maxTokens || "")}" placeholder="mis. 16000"></label>
-          <label class="nor-f"><span>Temperatur<em>kosong = bawaan model</em></span><input id="norTemp" inputmode="decimal" value="${esc(draft.temperature || "")}" placeholder="mis. 0.3"></label>
-        </details>
-        ${msg ? `<div class="nor-msg ${msg.ok ? "ok" : "err"}">${esc(msg.text)}</div>` : ""}
-      </div>
-      <div class="nor-dlg-f"><button type="button" class="btn" data-nor="test">Uji koneksi</button><span style="flex:1"></span><button type="button" class="btn" data-nor="close">Batal</button><button type="button" class="btn primary" data-nor="save">Simpan &amp; pakai</button></div>
-    </div>`;
-  }
-  function collect() {
-    const id = draft.provider, p = draft.providers[id];
-    const k = document.getElementById("norKey"); if (k && k.value.trim()) draft.keys[id] = k.value.trim();
-    const b = document.getElementById("norBase"); if (b) p.baseUrl = b.value.trim();
-    const f = document.getElementById("norFmt"); if (f) p.format = f.value;
-    p.models = p.models || {};
-    document.querySelectorAll("#norSettings [data-model]").forEach(i => { p.models[i.dataset.model] = i.value.trim(); });
-    const mx = document.getElementById("norMax"); if (mx) draft.maxTokens = mx.value.trim();
-    const tp = document.getElementById("norTemp"); if (tp) draft.temperature = tp.value.trim();
-  }
-  async function persist() {
-    const patch = { provider: draft.provider, maxTokens: draft.maxTokens, temperature: draft.temperature, providers: {} };
-    for (const [k, p] of Object.entries(draft.providers)) {
-      patch.providers[k] = { baseUrl: p.baseUrl, models: p.models || {}, modelList: p.modelList || [] };
-      if (p.format) patch.providers[k].format = p.format;
-      if (draft.keys[k]) patch.providers[k].key = draft.keys[k];
-      if (p._delete) patch.providers[k].key = null;
-    }
-    SETTINGS = await D.saveSettings(patch);
-    const keep = draft.provider;
-    draft = Object.assign(JSON.parse(JSON.stringify(SETTINGS)), { keys: {} }); draft.provider = keep;
-  }
   document.addEventListener("click", async e => {
-    const t = e.target.closest && e.target.closest("#btnAISet");
-    if (t) { e.preventDefault(); return openSettings(); }
+    if (e.target.closest && e.target.closest("#btnAISet")) { e.preventDefault(); return openSettings(); }
     const ov = document.getElementById("norSettings"); if (!ov || ov.hidden || !ov.contains(e.target)) return;
     if (e.target === ov) return closeSettings();
-    const pv = e.target.closest("[data-prov]");
-    if (pv) { collect(); draft.provider = pv.dataset.prov; return renderSettings(); }
-    const b = e.target.closest("[data-nor]"); if (!b) return;
-    const act = b.dataset.nor;
-    if (act === "close") return closeSettings();
-    if (act === "peek") { const k = document.getElementById("norKey"); k.type = k.type === "password" ? "text" : "password"; return; }
-    collect();
-    if (act === "delkey") { draft.providers[draft.provider]._delete = true; delete draft.keys[draft.provider]; await persist(); applyToApp(); updateBadge(); return renderSettings({ ok: true, text: "Kunci dihapus." }); }
-    if (act === "models") {
-      b.disabled = true; b.textContent = "Memuat…";
-      const p = draft.providers[draft.provider];
-      const r = await D.listModels(draft.provider, { key: draft.keys[draft.provider], baseUrl: p.baseUrl, format: p.format });
-      if (r.ok) { p.modelList = r.list; renderSettings({ ok: true, text: `${r.list.length} model dimuat. Ketik di kolom model untuk memilih.` }); }
-      else renderSettings({ ok: false, text: "Daftar model gagal dimuat: " + r.error });
-      return;
-    }
-    if (act === "save" || act === "test") {
-      b.disabled = true; b.textContent = act === "save" ? "Menyimpan…" : "Menguji…";
-      try { await persist(); } catch (err) { return renderSettings({ ok: false, text: "Gagal menyimpan: " + (err && err.message || err) }); }
-      applyToApp(); updateBadge();
-      if (!configured()) return renderSettings({ ok: false, text: "Tersimpan, tetapi API key untuk penyedia ini masih kosong." });
-      try {
-        const h = D.ai({ messages: [{ role: "user", content: "Balas persis dengan kata: SIAP" }], tier: "quick", stream: false });
-        const r = await h.promise;
-        if (!r.ok) throw r.error;
-        lastStatus = { ok: true }; updateBadge();
-        if (act === "save") { closeSettings(); window.toast && window.toast(`AI siap: ${provLabel()} (${r.model}).`); }
-        else renderSettings({ ok: true, text: `Berhasil. Model ${r.model} menjawab: "${String(r.text).trim().slice(0, 60)}"` });
-      } catch (err) {
-        lastStatus = { ok: false, msg: err && err.message }; updateBadge();
-        renderSettings({ ok: false, text: (act === "save" ? "Tersimpan, tetapi uji koneksi gagal: " : "Uji koneksi gagal: ") + ((err && err.message) || err) });
+    const tb = e.target.closest("[data-tab]"); if (tb) { TAB = tb.dataset.tab; return renderSettings(); }
+    const b = e.target.closest("[data-act]"); if (!b) return;
+    const act = b.dataset.act; if (act === "close") return closeSettings();
+    const card = b.closest(".nk-card"); if (!card) return;
+    const [kind, id] = card.dataset.card.split(":");
+    const keyIn = card.querySelector(".nk-key"); const typed = keyIn && keyIn.value.trim();
+    if (act === "eye") { keyIn.type = keyIn.type === "password" ? "text" : "password"; return; }
+    const busy = (t) => { b.disabled = true; b.dataset.l = b.textContent; b.textContent = t; };
+    try {
+      if (kind === "ai") {
+        const draft = {};
+        if (typed) draft.key = typed;
+        const base = card.querySelector(".nk-base"); if (base) draft.baseUrl = base.value.trim();
+        const fmt = card.querySelector(".nk-fmt"); if (fmt) draft.format = fmt.value;
+        if (act === "save") {
+          if (!typed && !base) return cardMsg(card, false, "Tempel API key dulu.");
+          busy("Menyimpan…");
+          const patch = { providers: { [id]: draft } };
+          const firstKey = !Object.values(SETTINGS.providers).some(p => p.hasKey) || !SETTINGS.providers[SETTINGS.provider].hasKey;
+          if (firstKey) patch.provider = id;
+          await savePatch(patch);
+          if (firstKey) { renderSettings(); const nc = document.querySelector(`#norSettings [data-card="ai:${id}"]`); if (nc) cardMsg(nc, true, "Tersimpan dan dijadikan AI utama. Atur modelnya di kartu AI yang dipakai (atas) bila perlu, lalu Tes kunci."); return; }
+          return rerenderCard(card, { ok: true, text: firstKey ? "Tersimpan dan dijadikan AI utama. Klik Tes kunci untuk memastikan." : "Tersimpan. Klik Tes kunci untuk memastikan kunci berfungsi." });
+        }
+        if (act === "test") {
+          busy("Menguji…");
+          const r = await D.testAI(id, draft);
+          b.disabled = false; b.textContent = b.dataset.l;
+          return cardMsg(card, r.ok, r.ok ? `Berhasil. Model ${r.model} menjawab "${String(r.text).trim().slice(0, 40)}".${typed ? " Jangan lupa klik Simpan." : ""}` : "Gagal: " + r.error);
+        }
+        if (act === "use") { await savePatch({ provider: id }); return renderSettings(); }
+        if (act === "del") { await savePatch({ providers: { [id]: { key: null } } }); return rerenderCard(card, { ok: true, text: "Kunci dihapus." }); }
       }
+      if (kind === "lit") {
+        const extra = {}; card.querySelectorAll("[data-extra]").forEach(i => extra[i.dataset.extra] = i.value.trim());
+        if (act === "save") {
+          busy("Menyimpan…");
+          const v = { extra }; if (typed) { v.key = typed; v.enabled = true; }
+          await savePatch({ services: { [id]: v } });
+          return rerenderCard(card, { ok: true, text: "Tersimpan." + (typed ? " Sumber ini diaktifkan. Klik Tes kunci untuk memastikan." : "") });
+        }
+        if (act === "test") {
+          busy("Menguji…");
+          const h = D.lit(id, { q: "teacher professional development", question: "How does teacher professional development affect student achievement?", yearFrom: new Date().getFullYear() - 10, limit: 3 }, typed || "");
+          const r = await h.promise;
+          b.disabled = false; b.textContent = b.dataset.l;
+          const n = r.ok ? (r.data.papers || []).length : 0;
+          return cardMsg(card, r.ok && n > 0, r.ok ? (n ? `Berhasil: ${n} artikel ditemukan, mis. "${String(r.data.papers[0].title).slice(0, 70)}".` : "Tersambung, tetapi tidak ada hasil.") : "Gagal: " + (r.error && r.error.message || r.error));
+        }
+        if (act === "del") { await savePatch({ services: { [id]: { key: null, enabled: false } } }); return rerenderCard(card, { ok: true, text: "Kunci dihapus." }); }
+      }
+      if (kind === "active") {
+        const pid = card.querySelector("#nkProv").value;
+        const models = {}; card.querySelectorAll("[data-model]").forEach(i => models[i.dataset.model] = i.value.trim());
+        if (act === "saveActive") {
+          busy("Menyimpan…");
+          const changed = pid !== SETTINGS.provider;
+          await savePatch(changed ? { provider: pid } : { provider: pid, providers: { [pid]: { models } } });
+          if (changed) return renderSettings();
+          return rerenderCard(card, { ok: true, text: SETTINGS.providers[pid].hasKey ? "Tersimpan." : "Tersimpan, tetapi penyedia ini belum punya API key. Isi kuncinya di kartu di bawah." });
+        }
+        if (act === "models") {
+          busy("Memuat…");
+          if (pid !== SETTINGS.provider) await savePatch({ provider: pid });
+          const r = await D.listModels(pid, {});
+          if (r.ok) { UI.modelList[pid] = r.list; await D.saveSettings({ providers: { [pid]: { modelList: r.list } } }); }
+          return rerenderCard(card, r.ok ? { ok: true, text: `${r.list.length} model dimuat. Ketik di kolom model untuk memilih, lalu Simpan.` } : { ok: false, text: "Gagal memuat model: " + r.error });
+        }
+        if (act === "testActive") {
+          busy("Menguji…");
+          const r = await D.testAI(pid, { models });
+          b.disabled = false; b.textContent = b.dataset.l;
+          return cardMsg(card, r.ok, r.ok ? `Berhasil. ${r.model} menjawab "${String(r.text).trim().slice(0, 40)}".` : "Gagal: " + r.error);
+        }
+      }
+      if (kind === "sjr") {
+        busy(act === "sjrDl" ? "Mengunduh…" : "Memilih berkas…");
+        const r = act === "sjrDl" ? await D.sjrDownload() : await D.sjrImport();
+        if (r.ok) { setSjrInfo(r); return rerenderCard(card, { ok: true, text: `Berhasil: ${r.count.toLocaleString("id-ID")} jurnal terindeks.` }); }
+        b.disabled = false; b.textContent = b.dataset.l;
+        return cardMsg(card, false, (act === "sjrDl" ? "Unduhan gagal (" + r.error + "). Pakai cara manual di bawah." : r.error));
+      }
+      if (kind === "adv" && act === "saveAdv") {
+        await savePatch({ maxTokens: document.getElementById("nkMax").value.trim(), temperature: document.getElementById("nkTemp").value.trim() });
+        return cardMsg(card, true, "Tersimpan.");
+      }
+    } catch (err) {
+      b.disabled = false; if (b.dataset.l) b.textContent = b.dataset.l;
+      cardMsg(card, false, "Gagal: " + ((err && err.message) || err));
     }
+  });
+  document.addEventListener("change", async e => {
+    const ov = document.getElementById("norSettings"); if (!ov || ov.hidden || !ov.contains(e.target)) return;
+    if (e.target.dataset.en) { await savePatch({ services: { [e.target.dataset.en]: { enabled: e.target.checked } } }); }
   });
   window.ktiOpenSettings = openSettings;
 
