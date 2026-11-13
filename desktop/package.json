@@ -1,0 +1,47 @@
+{
+  "name": "kti-checker-desktop",
+  "productName": "KTI Checker NOR",
+  "version": "1.0.0",
+  "description": "KTI Checker (Nusantara of Research) untuk Windows: pemeriksaan naskah KTI/artikel dengan API key Gemini, ClassAI Router, OpenAI, Anthropic, OpenRouter.",
+  "author": "Nusantara of Research",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "src/main.js",
+  "scripts": {
+    "prepare-app": "node scripts/build-app.js",
+    "start": "npm run prepare-app && electron .",
+    "dist": "npm run prepare-app && electron-builder --win nsis --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "33.4.11",
+    "electron-builder": "25.1.8",
+    "jszip": "3.10.1",
+    "jspdf": "2.5.1",
+    "jspdf-autotable": "3.8.2",
+    "pdfjs-dist": "3.11.174"
+  },
+  "build": {
+    "appId": "id.nusantaraofresearch.ktichecker",
+    "productName": "KTI Checker NOR",
+    "copyright": "Nusantara of Research",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["src/**/*", "app/**/*", "package.json"],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "build/icon.ico",
+      "artifactName": "KTI-Checker-NOR-Setup-${version}.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "KTI Checker NOR",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerLanguages": ["id_ID", "en_US"],
+      "language": "1057"
+    }
+  }
+}
