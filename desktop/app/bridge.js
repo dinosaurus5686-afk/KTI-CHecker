@@ -58,7 +58,7 @@
     await acquire();
     try {
       for (let attempt = 0; ; attempt++) {
-        const h = D.ai({ messages: norm, system, tier, stream: !!opts.onText }, opts.onText ? (text => { try { opts.onText({ text }); } catch (e) {} }) : null);
+        const h = D.ai({ messages: norm, system, tier, stream: !!opts.onText, precise: !!system }, opts.onText ? (text => { try { opts.onText({ text }); } catch (e) {} }) : null);
         const onAbort = () => h.abort();
         if (signal) signal.addEventListener("abort", onAbort, { once: true });
         let r;
@@ -326,6 +326,24 @@
       <div class="nk-msg" aria-live="polite"></div>
       <details class="nk-guide"><summary>Bila unduhan otomatis gagal</summary><ol><li>Buka scimagojr.com/journalrank.php di browser.</li><li>Klik tombol <b>Download data</b> di kanan atas tabel (berkas .csv).</li><li>Kembali ke sini, klik <b>Impor berkas SJR</b>, lalu pilih berkas tersebut.</li></ol><a href="https://www.scimagojr.com/journalrank.php" target="_blank" rel="noopener">Buka scimagojr.com ↗</a></details></section>`;
   }
+  function compCard() {
+    const c = SETTINGS.companion || {}; const a = c.apps || {};
+    const ck = (k, v, l, d) => `<label class="nk-switch"><input type="checkbox" data-comp="${k}" ${v ? "checked" : ""}><span>${l}${d ? `<br><small class="nk-hint">${d}</small>` : ""}</span></label>`;
+    return `<section class="nk-card hero" data-card="comp"><h3>🛰️ Pendamping otomatis ${badge("Gratis")}</h3>
+      <p class="nk-desc">Saat Claude, ChatGPT, atau Gemini dibuka (aplikasi desktop atau tab browser), panel KTI Checker muncul di pojok kanan bawah. Jawaban AI yang Anda salin (Ctrl+C) langsung diperiksa: rujukan fiktif, DOI salah, artikel ditarik, kuartil jurnal, dan sitasi yang tidak ada di daftar pustaka. Tombol <b>Analisis penuh</b> memuat teks itu ke KTI Checker.</p>
+      ${ck("enabled", c.enabled, "Aktifkan pendamping otomatis", "Aplikasi tetap berjalan di area notifikasi (dekat jam) setelah jendela ditutup.")}
+      ${ck("autostart", c.autostart, "Jalankan saat Windows menyala", "Berjalan diam-diam di latar; jendela utama tidak dibuka.")}
+      ${ck("clipboard", c.clipboard, "Periksa otomatis teks yang disalin dari AI", "Papan klip hanya dibaca ketika Claude/ChatGPT/Gemini aktif atau baru saja dipakai (60 detik).")}
+      <label class="nk-lab">Deteksi aplikasi</label>
+      <div class="nk-acts">${ck("app:claude", a.claude !== false, "Claude")}${ck("app:chatgpt", a.chatgpt !== false, "ChatGPT")}${ck("app:gemini", a.gemini !== false, "Gemini")}</div>
+      <div class="nk-acts"><button type="button" class="nk-btn gold" data-act="compShow">🪟 Tampilkan panel sekarang</button></div>
+      <div class="nk-msg" aria-live="polite"></div>
+      <details class="nk-guide"><summary>Cara kerja deteksi</summary><ol>
+        <li>Aplikasi desktop Claude dan ChatGPT dikenali dari nama programnya.</li>
+        <li>Di browser (Chrome, Edge, Firefox, Brave, Opera), tab dikenali dari judulnya: "Claude", "ChatGPT", atau "Gemini". Percakapan ChatGPT yang sudah diberi judul kadang tidak memuat kata "ChatGPT" di judul tab; bila panel tidak muncul, klik 📋 di panel atau buka panel dari ikon NOR di area notifikasi.</li>
+        <li>Tidak ada isi percakapan yang dikirim ke mana pun kecuali judul/DOI rujukan ke OpenAlex dan Crossref untuk diverifikasi.</li></ol></details>
+    </section>`;
+  }
   function advCard() {
     return `<section class="nk-card" data-card="adv"><h3>⚙️ Lanjutan</h3>
       <label class="nk-lab">Batas token keluaran <em>kosong = bawaan penyedia (Anthropic 16000). Naikkan bila review terpotong.</em></label><input class="nk-in" id="nkMax" inputmode="numeric" value="${esc(SETTINGS.maxTokens || "")}" placeholder="mis. 32000">
@@ -334,10 +352,11 @@
   }
   function renderSettings() {
     const ov = document.getElementById("norSettings");
-    const tabs = [["ai", "🤖 Penyedia AI"], ["lit", "📚 Sumber literatur"], ["adv", "⚙️ Lanjutan"]];
+    const tabs = [["ai", "🤖 Penyedia AI"], ["lit", "📚 Sumber literatur"], ["comp", "🛰️ Pendamping AI"], ["adv", "⚙️ Lanjutan"]];
     let body = "";
     if (TAB === "ai") body = activeCard() + Object.keys(PROVIDERS).map(id => keyCard("ai", id)).join("");
     else if (TAB === "lit") body = `<p class="nk-intro">Sumber yang diaktifkan dicari bersamaan saat <b>Revisi naskah</b> dan <b>Revisi instan</b>. Setiap kandidat dicocokkan ulang ke OpenAlex/Crossref (DOI, penulis, status penarikan) sebelum boleh dikutip, dan diberi label kuartil SJR bila jurnalnya terindeks Scopus.</p>` + sjrCard() + Object.keys(SERVICES).map(id => keyCard("lit", id)).join("");
+    else if (TAB === "comp") body = compCard();
     else body = advCard();
     ov.innerHTML = `<div class="nk-dlg" role="dialog" aria-modal="true" aria-labelledby="nkT">
       <div class="nk-head"><img src="logo-mark.png" alt=""><div><h2 id="nkT">Pengaturan</h2><p>Kunci hanya disimpan (terenkripsi) di laptop ini dan dikirim langsung ke layanan terkait.</p></div><button class="nk-x" type="button" data-act="close" aria-label="Tutup">✕</button></div>
@@ -357,7 +376,7 @@
   function cardMsg(card, ok, text) { const m = card.querySelector(".nk-msg"); if (m) { m.className = "nk-msg " + (ok ? "ok" : "err"); m.textContent = text; } }
   function rerenderCard(card, msg) {
     const [kind, id] = card.dataset.card.split(":");
-    const html = kind === "ai" ? keyCard("ai", id) : kind === "lit" ? keyCard("lit", id) : kind === "active" ? activeCard() : kind === "sjr" ? sjrCard() : advCard();
+    const html = kind === "ai" ? keyCard("ai", id) : kind === "lit" ? keyCard("lit", id) : kind === "active" ? activeCard() : kind === "sjr" ? sjrCard() : kind === "comp" ? compCard() : advCard();
     const t = document.createElement("div"); t.innerHTML = html; const nc = t.firstElementChild;
     card.replaceWith(nc); if (msg) cardMsg(nc, msg.ok, msg.text); return nc;
   }
@@ -449,6 +468,7 @@
         b.disabled = false; b.textContent = b.dataset.l;
         return cardMsg(card, false, (act === "sjrDl" ? "Unduhan gagal (" + r.error + "). Pakai cara manual di bawah." : r.error));
       }
+      if (kind === "comp" && act === "compShow") { await D.companion.show(); return cardMsg(card, true, "Panel ditampilkan di pojok kanan bawah layar."); }
       if (kind === "adv" && act === "saveAdv") {
         await savePatch({ maxTokens: document.getElementById("nkMax").value.trim(), temperature: document.getElementById("nkTemp").value.trim() });
         return cardMsg(card, true, "Tersimpan.");
@@ -461,11 +481,37 @@
   document.addEventListener("change", async e => {
     const ov = document.getElementById("norSettings"); if (!ov || ov.hidden || !ov.contains(e.target)) return;
     if (e.target.dataset.en) { await savePatch({ services: { [e.target.dataset.en]: { enabled: e.target.checked } } }); }
+    if (e.target.dataset.comp) {
+      const k = e.target.dataset.comp, v = e.target.checked;
+      const patch = k.startsWith("app:") ? { apps: { [k.slice(4)]: v } } : { [k]: v };
+      await savePatch({ companion: patch });
+      const card = e.target.closest(".nk-card"); if (card) cardMsg(card, true, "Tersimpan.");
+    }
   });
   window.ktiOpenSettings = openSettings;
 
+  /* ─────────── Pendamping AI: status di rel & teks kiriman panel ─────────── */
+  function compBadge(st) {
+    const lab = document.getElementById("compLabel"), dot = document.getElementById("compDot"); if (!lab) return;
+    if (!st || !st.enabled) { lab.textContent = "Nonaktif"; dot.className = "dot off"; return; }
+    lab.textContent = st.app ? st.appLabel + " terdeteksi" : "Menunggu AI dibuka";
+    dot.className = "dot " + (st.app ? "on" : "");
+  }
+  if (D.companion) {
+    D.companion.onState(compBadge);
+    D.companion.onAnalyze(async p => {
+      await ready;
+      try {
+        if (typeof handleFile !== "function") throw new Error("handleFile tidak tersedia");
+        await handleFile(new File([p.text], p.name || "Teks_AI.txt", { type: "text/plain" }));
+        window.toast && window.toast("Teks dari AI dimuat. Pilih jenis dokumen di atas, lalu tekan Mulai analisis bila perlu.");
+      } catch (e) { window.toast && window.toast("Teks gagal dimuat: " + (e && e.message || e)); }
+    });
+    document.addEventListener("click", e => { if (e.target.closest && e.target.closest("#btnCompanion")) { e.preventDefault(); openSettings("comp"); } });
+  }
   document.addEventListener("DOMContentLoaded", () => {
     updateBadge();
+    if (D.companion) D.companion.state().then(compBadge);
     ready.then(() => { if (!configured()) setTimeout(openSettings, 600); });
   });
 })();

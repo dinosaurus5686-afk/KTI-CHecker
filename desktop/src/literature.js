@@ -132,17 +132,22 @@ async function openalex(args, cfg, signal, fetch) {
   const key = cfg.key ? "&api_key=" + encodeURIComponent(cfg.key) : "";
   const base = "https://api.openalex.org/works";
   if (Array.isArray(args.dois) && args.dois.length) {
-    const out = [];
-    await Promise.all(args.dois.slice(0, 25).map(async d => { try { out.push(oaPaper(await getJSON(fetch, `${base}/doi:${encodeURIComponent(cleanDoi(d))}?${OA_SEL.slice(1)}${key}`, null, "OpenAlex", signal))); } catch (e) { if (e && e.code === "not_granted") throw e; } }));
+    const out = []; let hard = null, answered = 0;
+    await Promise.all(args.dois.slice(0, 25).map(async d => {
+      try { out.push(oaPaper(await getJSON(fetch, `${base}/doi:${encodeURIComponent(cleanDoi(d))}?${OA_SEL.slice(1)}${key}`, null, "OpenAlex", signal))); answered++; }
+      catch (e) { if (e && e.code === "http_404") answered++; else hard = hard || e || { code: "network" }; }
+    }));
+    if (!answered && hard) throw hard; // jaringan/kunci bermasalah: jangan dianggap "DOI tidak ada"
     return { papers: out };
   }
   if (Array.isArray(args.titles) && args.titles.length) {
-    const out = [];
+    const out = []; let hard = null, answered = 0;
     await Promise.all(args.titles.slice(0, 20).map(async t => {
       const q = String(t).replace(/[,:|!*()"\[\]?]/g, " ").replace(/\s+/g, " ").trim().slice(0, 250); if (!q) return;
-      try { const j = await getJSON(fetch, `${base}?filter=title.search:${encodeURIComponent(q)}&per-page=2${OA_SEL}${key}`, null, "OpenAlex", signal); (j.results || []).forEach(w => out.push(oaPaper(w))); }
-      catch (e) { if (e && (e.code === "not_granted")) throw e; }
+      try { const j = await getJSON(fetch, `${base}?filter=title.search:${encodeURIComponent(q)}&per-page=2${OA_SEL}${key}`, null, "OpenAlex", signal); (j.results || []).forEach(w => out.push(oaPaper(w))); answered++; }
+      catch (e) { hard = hard || e || { code: "network" }; }
     }));
+    if (!answered && hard) throw hard;
     return { papers: out };
   }
   const term = String(args.q || "").replace(/\bAND\b|\bOR\b/g, " ").replace(/"/g, "").replace(/\s+/g, " ").trim();
@@ -166,13 +171,14 @@ async function crossref(args, cfg, signal, fetch) {
   const mail = cfg.extra && cfg.extra.mailto ? "&mailto=" + encodeURIComponent(cfg.extra.mailto) : "";
   const sel = "&select=DOI,title,author,container-title,issued,volume,issue,page,abstract,is-referenced-by-count,type,ISSN,URL,update-to";
   if (Array.isArray(args.titles) && args.titles.length) {
-    const out = [];
+    const out = []; let hard = null, answered = 0;
     await Promise.all(args.titles.slice(0, 20).map(async t => {
-      try { const j = await getJSON(fetch, `https://api.crossref.org/works?query.title=${encodeURIComponent(String(t).slice(0, 250))}&rows=2${sel}${mail}`, null, "Crossref", signal); ((j.message && j.message.items) || []).forEach(it => out.push(crPaper(it))); } catch (e) {}
+      try { const j = await getJSON(fetch, `https://api.crossref.org/works?query.title=${encodeURIComponent(String(t).slice(0, 250))}&rows=2${sel}${mail}`, null, "Crossref", signal); ((j.message && j.message.items) || []).forEach(it => out.push(crPaper(it))); answered++; } catch (e) { hard = hard || e; }
     }));
+    if (!answered && hard) throw hard;
     return { papers: out };
   }
-  const j = await getJSON(fetch, `https://api.crossref.org/works?query.bibliographic=${encodeURIComponent(String(args.q || "").replace(/\bAND\b|"/g, " ").slice(0, 300))}&rows=${Math.min(20, args.limit || 8)}&filter=type:journal-article${args.yearFrom ? ",from-pub-date:" + args.yearFrom : ""}${sel}${mail}`, null, "Crossref", signal);
+  const j = await getJSON(fetch, `https://api.crossref.org/works?query.bibliographic=${encodeURIComponent(String(args.q || "").replace(/\bAND\b|"/g, " ").slice(0, 300))}&rows=${Math.min(20, args.limit || 8)}${args.anyType ? (args.yearFrom ? "&filter=from-pub-date:" + args.yearFrom : "") : "&filter=type:journal-article" + (args.yearFrom ? ",from-pub-date:" + args.yearFrom : "")}${sel}${mail}`, null, "Crossref", signal);
   return { papers: ((j.message && j.message.items) || []).map(crPaper).filter(p => p.title) };
 }
 

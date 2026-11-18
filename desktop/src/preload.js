@@ -1,6 +1,10 @@
 // Jembatan aman antara halaman dan proses utama.
 const { contextBridge, ipcRenderer } = require("electron");
 const listeners = new Map();
+const compSubs = new Set(), textSubs = new Set(), analyzeSubs = new Set();
+ipcRenderer.on("companion:state", (e, st) => compSubs.forEach(f => f(st)));
+ipcRenderer.on("companion:text", (e, p) => textSubs.forEach(f => f(p)));
+ipcRenderer.on("companion:analyze", (e, p) => analyzeSubs.forEach(f => f(p)));
 ipcRenderer.on("ai:delta", (e, id, text) => { const f = listeners.get(id); if (f) f(text); });
 let seq = 0;
 contextBridge.exposeInMainWorld("ktiDesktop", {
@@ -13,6 +17,20 @@ contextBridge.exposeInMainWorld("ktiDesktop", {
   saveFile: (filename, data, isText) => ipcRenderer.invoke("file:save", { filename, data, isText }),
   reveal: p => ipcRenderer.invoke("file:reveal", p),
   services: () => ipcRenderer.invoke("settings:services"),
+  companion: {
+    state: () => ipcRenderer.invoke("companion:state"),
+    onState: f => { compSubs.add(f); return () => compSubs.delete(f); },
+    onText: f => { textSubs.add(f); return () => textSubs.delete(f); },
+    onAnalyze: f => { analyzeSubs.add(f); return () => analyzeSubs.delete(f); },
+    expand: v => ipcRenderer.invoke("companion:expand", v),
+    hide: () => ipcRenderer.invoke("companion:hide"),
+    show: () => ipcRenderer.invoke("companion:show"),
+    pin: v => ipcRenderer.invoke("companion:pin", v),
+    clipboard: () => ipcRenderer.invoke("companion:clipboard"),
+    openMain: payload => ipcRenderer.invoke("companion:openMain", payload),
+    simulate: (p, t) => ipcRenderer.invoke("companion:simulate", p, t),
+    simText: t => ipcRenderer.invoke("companion:simText", t)
+  },
   testAI: (id, draft) => ipcRenderer.invoke("ai:test", id, draft),
   lit: (id, args, draftKey) => {
     const rid = "l" + (++seq) + "_" + Date.now();

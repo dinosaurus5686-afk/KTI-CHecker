@@ -77,6 +77,20 @@ body{background:var(--scene-base)}
 .rail-foot{background:rgba(246,236,217,.05)!important;border:1px solid rgba(246,236,217,.10)!important;color:#c9a99a!important}
 .rail-foot strong{color:var(--nor-cream)!important}
 
+/* Rel: menu bisa digulir agar semua item (termasuk Publikasi NOR) selalu terjangkau */
+.app .rail{overflow:hidden;gap:14px!important}
+.app .rail .nav{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;padding-right:4px;margin-right:-4px;scrollbar-width:thin;scrollbar-color:rgba(246,236,217,.25) transparent}
+.app .rail .nav::-webkit-scrollbar{width:6px}
+.app .rail .nav::-webkit-scrollbar-thumb{background:rgba(246,236,217,.22);border-radius:6px}
+.app .rail-foot{flex:none}
+@media (max-height: 860px){ .app .rail-foot{display:none} .nor-brand .nor-logo{width:118px} }
+.railquick{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:-4px}
+.railquick .aiset{margin:0;padding:9px 10px;gap:8px}
+.railquick .aiset .ico{font-size:16px;flex:none}
+.railquick .aiset b{font-size:12.5px}
+.railquick .aiset small{font-size:10.5px}
+.aiset.norset[aria-current="page"],.aiset.norset.on{background:linear-gradient(90deg,#c0302a,#9e1f1a);border-color:transparent}
+
 /* Tombol Pengaturan AI di rel */
 .aiset{display:flex;align-items:center;gap:10px;width:100%;margin:-6px 0 0;padding:10px 12px;border-radius:14px;border:1px solid rgba(246,236,217,.16);background:rgba(192,48,42,.18);color:var(--nor-cream);text-align:left;cursor:pointer}
 .aiset:hover{background:rgba(192,48,42,.30)}

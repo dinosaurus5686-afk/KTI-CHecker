@@ -56,7 +56,8 @@ patch(/<\/style>\s*<div class="app">/, m => m.replace("</style>", "</style>\n<li
 /* 4. Merek NOR di rel kiri */
 patch(/<div class="brand">\s*<svg[\s\S]*?<\/svg>\s*<div><b>KTI CHECKER <span>DASHBOARD<\/span><\/b><\/div>\s*<\/div>/,
   `<div class="brand nor-brand"><img src="logo-mark.png" alt="NOR" class="nor-logo"><div><b>KTI CHECKER</b><small>Nusantara of Research</small></div></div>
-    <button type="button" class="aiset" id="btnAISet" title="Atur penyedia AI dan API key"><span class="dot" id="aiDot"></span><span><b>Pengaturan AI</b><small id="aiProvLabel">Belum diatur</small></span></button>`, "brand");
+    <button type="button" class="aiset" id="btnAISet" title="Atur penyedia AI dan API key"><span class="dot" id="aiDot"></span><span><b>Pengaturan AI</b><small id="aiProvLabel">Belum diatur</small></span></button>
+    <div class="railquick"><button type="button" class="aiset norset" data-view="nor" title="Alur publikasi NOR: Submission, Review, Copyediting, Production, Publication"><span class="ico">📚</span><span><b>Kelola NOR</b><small>Alur publikasi OJS</small></span></button><button type="button" class="aiset norset" id="btnCompanion" title="Pendamping otomatis untuk Cl&#97;ude, ChatGPT, dan Gemini"><span class="dot" id="compDot"></span><span><b>Pendamping AI</b><small id="compLabel">Memeriksa…</small></span></button></div>`, "brand");
 
 /* 5. Banner sambungan AI versi desktop */
 patch("function claudeBanner(){", "function claudeBanner(){ if (window.__ktiBanner) return (!S.sampleChecked || S.sample) ? \"\" : window.__ktiBanner();", "banner");

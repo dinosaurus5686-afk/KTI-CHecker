@@ -7,6 +7,12 @@ const fs = require("fs");
 const { pathToFileURL } = require("url");
 const { PROVIDERS } = require("./providers");
 const LIT = require("./literature");
+const { Companion } = require("./companion");
+const COMP_DEFAULT = { enabled: true, autostart: true, clipboard: true, minChars: 120, apps: { claude: true, chatgpt: true, gemini: true } };
+let mainWin = null, companion = null;
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) app.quit();
+app.on("second-instance", () => showMain());
 
 protocol.registerSchemesAsPrivileged([
   { scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }
@@ -55,6 +61,7 @@ function publicSettings() {
       modelList: p.modelList || []
     };
   }
+  out.companion = companionConfig(s);
   out.services = {};
   for (const id of Object.keys(LIT.SERVICES)) {
     const v = (s.services || {})[id] || {};
@@ -62,6 +69,12 @@ function publicSettings() {
     out.services[id] = { hasKey: !!k, keyHint: k ? (k.slice(0, 4) + "…" + k.slice(-4)) : "", enabled: v.enabled === undefined ? LIT.SERVICES[id].defaultOn !== false : !!v.enabled, extra: v.extra || {} };
   }
   return out;
+}
+function companionConfig(s) {
+  s = s || readRaw();
+  const c = Object.assign({}, COMP_DEFAULT, s.companion || {});
+  c.apps = Object.assign({}, COMP_DEFAULT.apps, (s.companion || {}).apps || {});
+  return c;
 }
 function serviceConfig(id) {
   const s = readRaw(); const v = (s.services || {})[id] || {};
@@ -92,7 +105,9 @@ function saveSettings(patch) {
     if (v.extra !== undefined) cur.extra = Object.assign({}, cur.extra || {}, v.extra);
     s.services[id] = cur;
   }
+  if (patch.companion) { s.companion = Object.assign({}, companionConfig(s), patch.companion); if (patch.companion.apps) s.companion.apps = Object.assign({}, companionConfig(s).apps, patch.companion.apps); }
   writeRaw(s);
+  if (patch.companion && companion) companion.applyConfig();
   return publicSettings();
 }
 function resolveProvider(id) {
@@ -145,7 +160,10 @@ async function readSSE(res, onData, signal) {
   }
 }
 
-async function chat(cfg, { messages, system, tier, stream, jsonMode }, signal, onDelta) {
+async function chat(cfg, { messages, system, tier, stream, jsonMode, precise }, signal, onDelta) {
+  // Penilaian (JSON) memakai suhu rendah agar hasil konsisten, kecuali pengguna mengatur suhu sendiri.
+  // Hanya untuk penyedia/model yang menerima suhu (Gemini, Anthropic); model penalaran OpenAI menolak parameter ini.
+  if (precise && (cfg.temperature == null || isNaN(cfg.temperature)) && (cfg.id === "gemini" || cfg.format === "anthropic" || /gemini|claude/i.test(cfg.models[tier] || ""))) cfg = Object.assign({}, cfg, { temperature: 0.2 });
   const model = (cfg.models[tier] || cfg.models.default || "").trim();
   if (!model) throw { code: "not_granted", message: "Model untuk " + cfg.def.label + " belum dipilih. Buka Pengaturan AI." };
   let text = "";
@@ -321,8 +339,15 @@ ipcMain.handle("file:reveal", (ev, p) => { if (p) shell.showItemInFolder(p); });
 ipcMain.handle("app:info", () => ({ version: app.getVersion(), userData: app.getPath("userData") }));
 
 /* ───────────── Jendela ───────────── */
-function createWindow() {
+function showMain() {
+  if (!mainWin || mainWin.isDestroyed()) mainWin = createWindow();
+  if (mainWin.isMinimized()) mainWin.restore();
+  mainWin.show(); mainWin.focus();
+  return mainWin;
+}
+function createWindow(hidden) {
   const win = new BrowserWindow({
+    show: !hidden,
     width: 1400, height: 900, minWidth: 960, minHeight: 640,
     backgroundColor: "#1c0808",
     title: "KTI Checker NOR",
@@ -338,10 +363,38 @@ function createWindow() {
     if (!url.startsWith("app://")) { e.preventDefault(); if (/^https?:/i.test(url)) shell.openExternal(url); }
   });
   win.loadURL("app://kti/index.html");
+  // Menutup jendela utama tidak mematikan pendamping: aplikasi tetap berjalan di area notifikasi (tray).
+  win.on("close", e => {
+    if (!app.isQuitting && companionConfig().enabled) {
+      e.preventDefault(); win.hide();
+      if (!app.trayHintShown && companion) { app.trayHintShown = true; companion.notify("KTI Checker tetap berjalan", "Pendamping AI aktif di area notifikasi (dekat jam). Klik kanan ikon NOR untuk keluar."); }
+    }
+  });
   return win;
 }
 
+/* ───────────── Pendamping AI ───────────── */
+ipcMain.handle("companion:state", () => companion ? companion.publicState() : null);
+ipcMain.handle("companion:expand", (ev, v) => companion && companion.setExpanded(v));
+ipcMain.handle("companion:hide", () => companion && companion.hidePanel());
+ipcMain.handle("companion:show", () => companion && companion.showPanel(true));
+ipcMain.handle("companion:pin", (ev, v) => companion && companion.setPinned(v));
+ipcMain.handle("companion:clipboard", () => require("electron").clipboard.readText() || "");
+ipcMain.handle("companion:openMain", async (ev, payload) => {
+  const w = showMain();
+  if (payload && payload.text) {
+    const send = () => w.webContents.send("companion:analyze", payload);
+    if (w.webContents.isLoading()) w.webContents.once("did-finish-load", () => setTimeout(send, 1500)); else send();
+  }
+  return true;
+});
+if (process.env.KTI_TEST === "1") {
+  ipcMain.handle("companion:simulate", (ev, proc, title) => companion && companion.onForeground(proc, title));
+  ipcMain.handle("companion:simText", (ev, text) => companion && companion.pushText(text, "claude", "test"));
+}
+
 app.whenReady().then(() => {
+  if (!gotLock) return;
   LIT.setSjrFile(path.join(app.getPath("userData"), "sjr.json"));
   protocol.handle("app", req => {
     const u = new URL(req.url);
@@ -355,7 +408,14 @@ app.whenReady().then(() => {
     { label: "Edit", submenu: [{ role: "undo", label: "Urungkan" }, { role: "redo", label: "Ulangi" }, { type: "separator" }, { role: "cut", label: "Potong" }, { role: "copy", label: "Salin" }, { role: "paste", label: "Tempel" }, { role: "selectAll", label: "Pilih semua" }] },
     { label: "Tampilan", submenu: [{ role: "zoomIn", label: "Perbesar" }, { role: "zoomOut", label: "Perkecil" }, { role: "resetZoom", label: "Ukuran asli" }, { role: "togglefullscreen", label: "Layar penuh" }] }
   ]));
-  createWindow();
-  app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+  const background = process.argv.includes("--background");
+  mainWin = createWindow(background);
+  companion = new Companion({
+    preload: path.join(__dirname, "preload.js"), iconPath: path.join(APP_DIR, "icon.png"),
+    getConfig: () => companionConfig(), saveConfig: patch => saveSettings({ companion: patch }), onOpenMain: () => showMain()
+  });
+  companion.start();
+  app.on("activate", () => showMain());
 });
-app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
+app.on("before-quit", () => { app.isQuitting = true; if (companion) companion.stop(); });
+app.on("window-all-closed", () => { if (!companionConfig().enabled && process.platform !== "darwin") app.quit(); });

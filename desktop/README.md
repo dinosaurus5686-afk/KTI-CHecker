@@ -51,3 +51,14 @@ npm run dist     # membuat installer NSIS (dijalankan di Windows / GitHub Action
 ```
 
 `scripts/build-app.js` menyalin `../index.html` dan menerapkan tambalan kecil (tema NOR, jembatan AI, teks). Bila `index.html` berubah sehingga tambalan tidak cocok, build berhenti dan menyebut tambalan mana yang gagal. Installer dibangun otomatis oleh workflow `.github/workflows/desktop-windows.yml` di runner Windows dan diterbitkan sebagai rilis `desktop-v<versi>`.
+
+## Pendamping AI otomatis (v1.2)
+
+Saat Claude, ChatGPT, atau Gemini dibuka (aplikasi desktop maupun tab browser), KTI Checker NOR menampilkan panel kecil di pojok kanan bawah. Salin (Ctrl+C) jawaban AI yang memuat daftar pustaka, dan panel langsung memeriksa:
+
+- keberadaan setiap rujukan di OpenAlex/Crossref (fiktif, DOI salah, metadata berbeda, retracted);
+- kuartil jurnal dari data SCImago (bila sudah diunduh di Pengaturan);
+- kecocokan sitasi dalam teks dengan daftar pustaka;
+- kalimat yang terlalu panjang.
+
+Tombol **Analisis penuh di KTI Checker** memuat teks itu ke aplikasi utama. Aplikasi tetap berjalan di tray dan bisa menyala otomatis saat Windows dinyalakan; semua opsi ada di Pengaturan → Pendamping AI. Catatan: tab ChatGPT yang judulnya berupa nama percakapan mungkin tidak terdeteksi; buka panel dari ikon tray atau tombol Pendamping AI.
