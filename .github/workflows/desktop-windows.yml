@@ -43,7 +43,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: KTI-Checker-NOR-Setup-${{ steps.ver.outputs.version }}
-          path: desktop/dist/*.exe
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/*.zip
           if-no-files-found: error
 
       - name: Terbitkan rilis
@@ -52,7 +54,9 @@ jobs:
           tag_name: desktop-v${{ steps.ver.outputs.version }}
           name: KTI Checker NOR ${{ steps.ver.outputs.version }} (Windows)
           target_commitish: ${{ github.sha }}
-          files: desktop/dist/*.exe
+          files: |
+            desktop/dist/*.exe
+            desktop/dist/*.zip
           body: |
             Installer aplikasi desktop **KTI Checker NOR** untuk Windows 10/11 (64-bit).
 
@@ -60,5 +64,7 @@ jobs:
             2. Jalankan. Bila muncul "Windows protected your PC", klik **More info → Run anyway** (installer belum ditandatangani sertifikat).
             3. Ikuti langkah instalasi, lalu buka **KTI Checker NOR** dari Desktop atau menu Start.
             4. Isi API key di **Pengaturan AI** (Google AI Studio, ClassAI Router, OpenAI, Anthropic, OpenRouter, atau kustom).
+
+            **Bila browser memblokir unduhan .exe**, unduh `KTI-Checker-NOR-Portable-${{ steps.ver.outputs.version }}-win-x64.zip`: klik kanan → Extract All, lalu jalankan `KTI Checker NOR.exe` di dalam folder hasil ekstrak (tanpa instalasi).
 
             Dibangun dari commit ${{ github.sha }}.

@@ -10,7 +10,7 @@
   "scripts": {
     "prepare-app": "node scripts/build-app.js",
     "start": "npm run prepare-app && electron .",
-    "dist": "npm run prepare-app && electron-builder --win nsis --x64 --publish never"
+    "dist": "npm run prepare-app && electron-builder --win nsis zip --x64 --publish never"
   },
   "devDependencies": {
     "electron": "33.4.11",
@@ -27,11 +27,12 @@
     "directories": { "output": "dist", "buildResources": "build" },
     "files": ["src/**/*", "app/**/*", "package.json"],
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [{ "target": "nsis", "arch": ["x64"] }, { "target": "zip", "arch": ["x64"] }],
       "icon": "build/icon.ico",
-      "artifactName": "KTI-Checker-NOR-Setup-${version}.exe"
+      "artifactName": "KTI-Checker-NOR-Portable-${version}-win-x64.${ext}"
     },
     "nsis": {
+      "artifactName": "KTI-Checker-NOR-Setup-${version}.exe",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
