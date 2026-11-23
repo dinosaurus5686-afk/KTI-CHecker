@@ -1930,7 +1930,7 @@ function vReview(){
     ${S.aiErr?`<div class="notice err" style="margin-top:12px">${icon(IC.warn)}<div>${esc(S.aiErr)}</div></div>`:""}
     ${cta()?`<div style="margin-top:12px">${cta()}</div>`:""}</div>` : "";
   if (!ai) return vJournalCard() + `<div style="height:16px"></div>` + vReviewSetup(true) + head;
-  const tabs = seg("revview", S.revView, [["petunjuk",`Petunjuk revisi ${ai.petunjuk.length}`],["bagian","Per bagian"],["reviewer","Per reviewer"]]);
+  const tabs = seg("revview", S.revView, [["petunjuk",`Petunjuk revisi ${ai.petunjuk.length}`],["bagian","Per bagian"],["reviewer","Per reviewer · isian OJS"]]);
   const doneN = ai.petunjuk.filter(p=>S.revDone[p.langkah]).length;
   let body = "";
   if (S.revView==="petunjuk"){
@@ -1950,8 +1950,8 @@ function vReview(){
         <div class="flist">${per.flatMap(x=>x.b?x.b.komentar:[]).map(revComment).join("")||`<p class="empty">Tidak ada komentar.</p>`}</div></section>`;
     }).join("");
   } else {
-    body = ai.reviewers.map(r=>`<section class="card babcard"><div class="babhead"><h3>${esc(r.nama)}</h3>${sevPill(decSev(r.rekomendasi), r.rekomendasi)}<span class="chip">Skor ${r.skor}</span></div>
-      <p class="small muted" style="margin:0">Fokus: ${esc(r.fokus)}</p><div class="ai-note">${esc(r.ringkasan)}</div>
+    body = ai.reviewers.map((r,ri)=>`<section class="card babcard"><div class="babhead"><h3>${esc(r.nama)}</h3>${sevPill(decSev(r.rekomendasi), r.rekomendasi)}<span class="chip">Skor ${r.skor}</span></div>
+      <p class="small muted" style="margin:0">Fokus: ${esc(r.fokus)}</p><div class="ai-note">${esc(r.ringkasan)}</div>${vOjsRevForm(r,ri)}
       ${r.bagian.map(b=>`<details ${b.komentar.some(c=>c.sev==="error")?"open":""}><summary style="cursor:pointer;font-weight:700;font-size:13px;padding:6px 0">${esc(b.bagian)} · nilai ${b.nilai} · ${b.komentar.length} komentar</summary><div class="flist" style="margin:6px 0 10px">${b.komentar.map(revComment).join("")||`<p class="empty">Tidak ada komentar.</p>`}</div></details>`).join("")}</section>`).join("");
   }
   return vJournalCard() + head + `
@@ -4873,7 +4873,7 @@ async function admDownloadPdf(kind, paket){
 }
 
 /* ═════════════ SIMPAN HASIL KERJA PER NASKAH (IndexedDB di perangkat) ═════════════ */
-const WORK_KEYS = ["doc","jenis","tahap","local","local_nR","ai","aiErr","chat","filter","babSel","excl","rev","revSel","revDone","revProg","nRev","revNote","revNoteR","revNoDup","revTone","revSecSel","revView","aiUnits","aiPerBab","inst","ce","gram","sim","aicheck","adm","ojs","ojsWiz","cmp","finalMode","withAppendix","cmtOpt","norStage"];
+const WORK_KEYS = ["ojsRev","doc","jenis","tahap","local","local_nR","ai","aiErr","chat","filter","babSel","excl","rev","revSel","revDone","revProg","nRev","revNote","revNoteR","revNoDup","revTone","revSecSel","revView","aiUnits","aiPerBab","inst","ce","gram","sim","aicheck","adm","ojs","ojsWiz","cmp","finalMode","withAppendix","cmtOpt","norStage"];
 const WORK_DROP = new Set(["ctl","signal","url","onText"]);
 const WORK_MAX = 25;
 // salinan aman untuk disimpan: tanpa fungsi, pengendali proses, dan alamat gambar sementara
@@ -5199,6 +5199,49 @@ function edSave(id){
   S.edId=null; toast("Komentar disimpan."); render();
 }
 function edReset(id){ const f=edFind(id); if (!f || !f._orig) return; if (f.langkah!==undefined){ const old=f.langkah; f.langkah=f._orig.langkah; f.contoh=f._orig.contoh; if (S.revDone && S.revDone[old]!=null){ S.revDone[f.langkah]=S.revDone[old]; delete S.revDone[old]; } } else { f.title=f._orig.title; f.detail=f._orig.detail; f.fix=f._orig.fix; } delete f._orig; S.edId=null; toast("Teks Claude dikembalikan."); render(); }
+
+/* ═════════════ ISIAN FORMULIR REVIEW OJS PER REVIEWER ═════════════ */
+const OJS_REV_FIELDS = [
+  {k:"abstrak", label:"Bagaimanakah Abstrak dan Kata kunci artikel?", sec:["Abstrak"]},
+  {k:"pendahuluan", label:"Bagaimanakah Bagian Pendahuluan artikel?", sec:["Pendahuluan","Tujuan atau Fokus Penelitian"]},
+  {k:"metode", label:"Bagaimanakah Bagian Metode Penelitian pada Artikel?", sec:["Metode"]},
+  {k:"hasil", label:"Bagaimanakah Bagian Hasil Artikel?", sec:["Hasil"]},
+  {k:"pembahasan", label:"Bagaimanakah Bagian Pembahasan Artikel?", sec:["Pembahasan"]},
+  {k:"kesimpulan", label:"Bagaimanakah Bagian Kesimpulan dan Saran?", sec:["Kesimpulan dan Saran"]},
+  {k:"tambahan", label:"Bagaimanakah saran Tambahan untuk Kelayakan dan Kualitas Artikel?", sec:["Judul","Daftar Pustaka","Penulisan dan Bahasa","APA Style"], extra:true},
+  {k:"rekomendasi", label:"Bagaimanakah Rekomendasi Reviewer Terhadap Artikel ini?", rec:true},
+  {k:"alasan", label:"*) Alasan jika tidak dapat dimuat", why:true}
+];
+const OJS_REC = {"Diterima":"Dapat langsung dimuat tanpa revisi", "Revisi minor":"Dapat dimuat dengan revisi", "Revisi mayor":"Harus direvisi dan akan dicek kembali", "Ditolak":"Tidak dapat dimuat (tuliskan alasan pada kolom *)"};
+function ojsRevText(r, fd){
+  if (fd.rec) return OJS_REC[r.rekomendasi] || r.rekomendasi || "";
+  if (fd.why) return r.rekomendasi==="Ditolak" ? [sentence(r.ringkasan), ...r.bagian.flatMap(b=>b.komentar.filter(incl).filter(c=>c.sev==="error").map(c=>sentence(c.title)))].filter(Boolean).slice(0,6).join(" ") : "";
+  const bs = r.bagian.filter(b=>fd.sec.includes(b.bagian));
+  const items = bs.flatMap(b=>b.komentar.filter(incl).map(c=>({b:b.bagian, t:c.title, f:c.fix, ed:!!c._orig})));
+  const rated = bs.filter(b=>(+b.nilai||0)>0 || b.komentar.length);
+  const nilai = rated.length ? Math.round(rated.reduce((a,b)=>a+(+b.nilai||0),0)/rated.length) : null;
+  const open = nilai==null ? "" : nilai>=80 ? "Secara umum bagian ini sudah baik." : nilai>=60 ? "Bagian ini cukup baik, tetapi masih perlu diperbaiki." : "Bagian ini perlu diperbaiki secara mendasar.";
+  const head = fd.extra ? [sentence(r.ringkasan)].filter(Boolean) : [open].filter(Boolean);
+  const pts = items.map((x,i)=>`${i+1}. ${fd.extra&&bs.length>1?x.b+": ":""}${x.ed?x.t:sentence(x.t)}${x.f?` Saran: ${x.ed?x.f:sentence(x.f)}`:""}`);
+  if (!pts.length && !fd.extra) return nilai!=null && nilai<60 ? "Bagian ini perlu diperbaiki secara mendasar." : "Bagian ini sudah memadai; tidak ada catatan khusus.";
+  return [...head, ...pts].join("\n");
+}
+function ojsRevState(){ const sig = S.ai ? (S.ai.ringkasan||"")+"|"+S.ai.skor : ""; if (!S.ojsRev || S.ojsRev._sig!==sig) S.ojsRev={_sig:sig}; return S.ojsRev; }
+const ojsRevVal = (r, fd) => { const st=ojsRevState(), key=r.nama+"|"+fd.k; return st[key]!=null ? st[key] : ojsRevText(r, fd); };
+function vOjsRevForm(r, ri){
+  const st=ojsRevState();
+  const rows = s => Math.min(10, Math.max(2, String(s||"").split("\n").reduce((a,l)=>a+Math.ceil((l.length||1)/90),0)));
+  return `<details class="ojsrev" style="margin:10px 0 4px;border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:var(--surface-2)" ${ri===0?"open":""}><summary style="cursor:pointer;font-weight:800;font-size:13px">Isian formulir review OJS · ${esc(revName(r.nama))}</summary>
+    <p class="small muted" style="margin:8px 0 10px">Ringkasan per bagian dari hasil review ${esc(revName(r.nama))}, siap ditempel ke formulir reviewer di OJS. Teks bisa diubah dulu; tekan Salin lalu tempel di kolom OJS yang sama.</p>
+    ${OJS_REV_FIELDS.map(fd=>{ const v=ojsRevVal(r,fd), id=`or_${ri}_${fd.k}`; const edited = st[r.nama+"|"+fd.k]!=null;
+      return `<div style="margin:0 0 12px"><div style="display:flex;gap:8px;align-items:center;margin-bottom:4px"><label class="small" for="${id}" style="font-weight:700;flex:1">${esc(fd.label)}${edited?` <span class="chip">diedit</span>`:""}</label><button class="btn sm" data-orcopy="${id}" data-orlabel="${esc(fd.label)}">Salin</button></div>
+        ${fd.rec ? `<input id="${id}" data-ored="${esc(r.nama+"|"+fd.k)}" value="${esc(v)}" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font:inherit;font-size:13px;font-weight:700"><div class="small muted" style="margin-top:3px">Pilih opsi yang sesuai di OJS. Rekomendasi reviewer: <b>${esc(r.rekomendasi)}</b> (skor ${r.skor}).</div>`
+          : `<textarea id="${id}" data-ored="${esc(r.nama+"|"+fd.k)}" rows="${rows(v)}" placeholder="${fd.why?"Kosongkan bila artikel dapat dimuat.":""}" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font:inherit;font-size:13px;resize:vertical">${esc(v)}</textarea>`}
+        ${edited?`<button class="linkish small" data-orreset="${esc(r.nama+"|"+fd.k)}">Kembalikan ringkasan otomatis</button>`:""}</div>`; }).join("")}
+    <div class="toolbar" style="margin:0"><button class="btn sm primary" data-orall="${ri}">Salin semua isian ${esc(revName(r.nama))}</button></div></details>`;
+}
+function ojsRevAll(ri){ const r=S.ai.reviewers[ri]; return OJS_REV_FIELDS.map(fd=>`${fd.label}\n${(document.getElementById(`or_${ri}_${fd.k}`)||{}).value ?? ojsRevVal(r,fd)}`).join("\n\n"); }
+document.addEventListener("input", e=>{ const t=e.target; if (t && t.dataset && t.dataset.ored){ ojsRevState()[t.dataset.ored]=t.value; } });
 
 /* ═════════════ RUN ═════════════ */
 const WEIGHTS = {struktur:{e:5,w:2,cap:25},isi:{e:3,w:1,cap:15},abstrak:{e:3,w:1.5,cap:12},bahasa:{e:1.5,w:.5,cap:12},sitasi:{e:2,w:1,cap:16},visual:{e:2,w:1,cap:8},format:{e:3,w:1.5,cap:12}};
@@ -5836,6 +5879,9 @@ document.addEventListener("click", e=>{
   const b = e.target.closest("button"); if(!b || b.disabled) return;
   if (b.id==="btnReset") return resetAll();
   if (b.dataset.cefooter){ ceState().meta.footer=b.dataset.cefooter; return render(); }
+  if (b.dataset.orcopy){ const el=document.getElementById(b.dataset.orcopy); return copyText(el?el.value:"", b.dataset.orlabel); }
+  if (b.dataset.orall!=null){ return copyText(ojsRevAll(+b.dataset.orall), "Semua isian reviewer"); }
+  if (b.dataset.orreset){ delete ojsRevState()[b.dataset.orreset]; return render(); }
   if (b.dataset.edopen){ S.edId=b.dataset.edopen; render(); const t=document.getElementById("edT"); if (t){ t.focus(); t.setSelectionRange(t.value.length,t.value.length); } return; }
   if (b.dataset.edsave) return edSave(b.dataset.edsave);
   if (b.dataset.edreset) return edReset(b.dataset.edreset);
